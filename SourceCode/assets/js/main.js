@@ -14,19 +14,27 @@ let questions = [];           // 所有題目
 let currentIndex = 0;         // 當前題目索引
 let showChinese = false;      // 是否顯示中文
 let answerState = {};         // 答題狀態 { questionNum: 'correct' | 'wrong' }
+let userAnswers = {};         // 使用者實際作答 { questionNum: 'A' | 'AC' }
 let selectedOptions = [];     // 多選題已選選項
 let hasAnswered = false;      // 當前題目是否已作答
 let randomJumpEnabled = false; // 隨機跳題功能
 let keywordHighlightEnabled = true; // 關鍵字高亮功能（預設啟用）
+
+// 題庫識別碼：不同題庫的作答進度彼此隔離，避免統計數字互相污染
+let bankId = 'default';
 
 // 閱讀範圍設定
 let rangeEnabled = false;     // 是否啟用範圍限制
 let rangeStart = 1;           // 起始題號
 let rangeEnd = null;          // 結束題號（null 表示到最後一題）
 let showImportantOnly = false; // 是否僅顯示重要題目
+let wrongOnlyEnabled = false;  // 僅複習答錯的題目
 
 // 題型過濾設定
 let enabledQuestionTypes = ['單選題', '多選題', '簡答題'];
+
+// 搜尋狀態
+let searchKeyword = '';       // 目前的搜尋關鍵字（空字串表示未搜尋）
 
 // GROQ AI 設定
 let groqApiKey = '';          // GROQ API Key
@@ -38,7 +46,9 @@ let timerEnabled = true;       // 是否啟用計時器（預設啟用）
 let timerDuration = 60;        // 計時器時間（秒，預設 60 秒）
 let timeRemaining = 0;         // 剩餘時間
 let timerInterval = null;      // 計時器 interval 參考
-let timerStartTime = 0;        // 計時器開始時間
+let timerStartTime = 0;        // 計時器總時長（秒）
+let timerDeadline = 0;         // 計時器到期時間戳（毫秒）
+let timerQuestionNum = null;   // 計時器所屬題號，用於判斷是否需要重新計時
 
 // ==================== 題庫解析器 ====================
 /**
@@ -145,26 +155,79 @@ function parseQuestions(markdown) {
     return questions;
 }
 
+/**
+ * 計算題庫識別碼（以題數與題號序列產生短雜湊）
+ *
+ * 不同題庫使用各自獨立的 localStorage 命名空間，
+ * 避免切換題庫時沿用到上一份題庫的作答紀錄而造成統計失真。
+ * @param {Array} list - 題目陣列
+ * @returns {string} 題庫識別碼
+ */
+function computeBankId(list) {
+    if (!list.length) return 'default';
+    const signature = `${list.length}:${list[0].number}:${list[list.length - 1].number}:` +
+        list.slice(0, 20).map(q => `${q.number}${q.type}`).join('');
+    let hash = 5381;
+    for (let i = 0; i < signature.length; i++) {
+        hash = ((hash << 5) + hash + signature.charCodeAt(i)) >>> 0;
+    }
+    return hash.toString(36);
+}
+
+/**
+ * 套用解析後的題庫並完成初始化
+ *
+ * 集中處理題號重複偵測、進度命名空間切換與初始渲染，
+ * 供自動載入、手動載入與重新載入三種進入點共用。
+ * @param {Array} parsed - parseQuestions 的結果
+ * @returns {boolean} 是否成功套用
+ */
+function applyQuestions(parsed) {
+    if (!parsed || parsed.length === 0) return false;
+
+    // 多檔合併時可能出現重複題號，重複的題目會導致答題卡同號多格且狀態連動
+    const seen = new Set();
+    const duplicates = [];
+    questions = parsed.filter(q => {
+        if (seen.has(q.number)) {
+            duplicates.push(q.number);
+            return false;
+        }
+        seen.add(q.number);
+        return true;
+    });
+
+    bankId = computeBankId(questions);
+    loadSavedProgress();
+    initQuiz();
+
+    if (duplicates.length > 0) {
+        showToast(`已略過 ${duplicates.length} 題重複題號（第 ${duplicates.slice(0, 3).join('、')} 題等）`, 'warn');
+    }
+    return true;
+}
+
 // ==================== 題庫載入 ====================
 /**
  * 嘗試自動載入同目錄下的題庫檔案
- * 注意：使用本地 file:/// 協議會出現 CORS 錯誤，建議使用 HTTP 伺服器
- * 例如：python -m http.server 8000，然後訪問 http://localhost:8000
+ *
+ * 以 file:// 開啟時瀏覽器會因同源政策阻擋 fetch，此時直接引導使用者手動選檔，
+ * 不再讓畫面停在沒有說明的空狀態。
  */
 async function autoLoadQuestions() {
+    if (location.protocol === 'file:') {
+        showEmptyState('離線模式（file://）無法自動讀取題庫，請點擊「載入題庫」選擇 Markdown 檔案');
+        return;
+    }
+
     try {
         const response = await fetch('database.md');
         if (response.ok) {
             const markdown = await response.text();
-            questions = parseQuestions(markdown);
-            if (questions.length > 0) {
-                loadSavedProgress();
-                initQuiz();
-                return;
-            }
+            if (applyQuestions(parseQuestions(markdown))) return;
         }
     } catch (e) {
-        console.log('自動載入失敗，等待手動選擇檔案');
+        console.warn('自動載入題庫失敗，等待手動選擇檔案', e);
     }
     // 顯示空狀態
     showEmptyState();
@@ -198,18 +261,15 @@ async function loadFileFromInput(event) {
         // 合併所有 MD 內容（用 --- 分隔符連接）
         const mergedMarkdown = contents.join('\n\n---\n\n');
 
-        questions = parseQuestions(mergedMarkdown);
-        if (questions.length > 0) {
-            loadSavedProgress();
-            initQuiz();
-            console.log(`成功載入 ${files.length} 個檔案，共 ${questions.length} 題`);
+        if (applyQuestions(parseQuestions(mergedMarkdown))) {
+            showToast(`已載入 ${files.length} 個檔案，共 ${questions.length} 題`, 'success');
         } else {
-            alert('無法解析題庫檔案，請確認格式正確');
+            showToast('無法解析題庫檔案，請確認格式正確', 'error');
             showEmptyState();
         }
     } catch (error) {
         console.error('載入檔案時發生錯誤:', error);
-        alert('載入檔案時發生錯誤，請重試');
+        showToast('載入檔案時發生錯誤，請重試', 'error');
         showEmptyState();
     }
 
@@ -221,22 +281,22 @@ async function loadFileFromInput(event) {
  * 重新載入題庫
  */
 async function reloadQuestions() {
+    if (location.protocol === 'file:') {
+        showToast('離線模式無法自動重新載入，請使用「載入題庫」選擇檔案', 'warn');
+        return;
+    }
+
     showLoadingState();
     try {
         const response = await fetch('database.md', { cache: 'no-cache' });
         if (response.ok) {
             const markdown = await response.text();
-            questions = parseQuestions(markdown);
-            if (questions.length > 0) {
-                loadSavedProgress();
-                initQuiz();
-                return;
-            }
+            if (applyQuestions(parseQuestions(markdown))) return;
         }
     } catch (e) {
-        console.log('重新載入失敗');
+        console.warn('重新載入題庫失敗', e);
     }
-    alert('重新載入失敗，請使用「載入題庫」按鈕手動選擇檔案');
+    showToast('重新載入失敗，請使用「載入題庫」按鈕手動選擇檔案', 'error');
     showQuizContainer();
 }
 
@@ -247,10 +307,24 @@ function showLoadingState() {
     document.getElementById('quizContainer').classList.add('hidden');
 }
 
-function showEmptyState() {
+/**
+ * 顯示空狀態
+ * @param {string} [message] - 額外的說明訊息（例如離線模式提示）
+ */
+function showEmptyState(message) {
     document.getElementById('loadingState').classList.add('hidden');
     document.getElementById('emptyState').classList.remove('hidden');
     document.getElementById('quizContainer').classList.add('hidden');
+
+    const hint = document.getElementById('emptyStateHint');
+    if (hint) {
+        if (message) {
+            hint.textContent = message;
+            hint.classList.remove('hidden');
+        } else {
+            hint.classList.add('hidden');
+        }
+    }
 }
 
 function showQuizContainer() {
@@ -273,43 +347,72 @@ function initQuiz() {
 
 /**
  * 生成答題卡格子
+ *
+ * 使用 DocumentFragment 批次插入並以事件委派取代逐格綁定，
+ * 大題庫（千題以上）下可避免大量 reflow 與事件閉包的記憶體開銷。
  */
 function generateAnswerCard() {
     const container = document.getElementById('answerCard');
     container.innerHTML = '';
 
+    const validIndices = new Set(getValidIndices());
+    const fragment = document.createDocumentFragment();
+
     for (let i = 0; i < questions.length; i++) {
-        const num = questions[i].number;
-        const div = document.createElement('div');
-        div.className = 'answer-card-item w-8 h-8 flex items-center justify-center text-xs font-medium rounded cursor-pointer transition-colors';
-        div.textContent = num;
+        const question = questions[i];
+        const div = document.createElement('button');
+        div.type = 'button';
+        div.className = 'answer-card-item w-8 h-8 flex items-center justify-center text-xs font-medium rounded transition-colors';
+        div.textContent = question.number;
         div.dataset.index = i;
+        div.dataset.num = question.number;
+        div.setAttribute('aria-label', `第 ${question.number} 題`);
 
-        // 設定顏色
-        updateCardItemColor(div, num);
-
-        // 點擊跳轉
-        div.onclick = () => {
-            currentIndex = i;
-            renderQuestion();
-        };
-
-        container.appendChild(div);
+        updateCardItemColor(div, question, validIndices.has(i));
+        fragment.appendChild(div);
     }
+
+    container.appendChild(fragment);
+}
+
+/**
+ * 答題卡點擊處理（事件委派）
+ *
+ * 被過濾條件排除的題目不可點擊，避免答題卡繞過閱讀範圍、
+ * 題型過濾等設定而跳到不該出現的題目。
+ */
+function handleAnswerCardClick(event) {
+    const item = event.target.closest('.answer-card-item');
+    if (!item) return;
+
+    const index = parseInt(item.dataset.index, 10);
+    if (Number.isNaN(index)) return;
+
+    if (!getValidIndices().includes(index)) {
+        showToast(`第 ${questions[index].number} 題不在目前的篩選範圍內`, 'warn');
+        return;
+    }
+
+    currentIndex = index;
+    renderQuestion();
 }
 
 /**
  * 更新答題卡格子顏色
+ * @param {HTMLElement} element - 格子元素
+ * @param {Object} question - 對應的題目物件
+ * @param {boolean} inRange - 是否符合目前的篩選條件
  */
-function updateCardItemColor(element, questionNum) {
-    const state = answerState[questionNum];
-    // 找到對應的題目檢查是否為簡答題
-    const question = questions.find(q => q.number === questionNum);
-    const isShortAnswer = question && question.isShortAnswer;
+function updateCardItemColor(element, question, inRange = true) {
+    const state = answerState[question.number];
 
-    element.classList.remove('bg-green-500', 'bg-red-500', 'bg-slate-600', 'bg-emerald-700', 'text-white', 'text-slate-400', 'text-slate-300', 'border', 'border-emerald-500');
+    element.classList.remove(
+        'bg-green-500', 'bg-red-500', 'bg-slate-600', 'bg-slate-700', 'text-white',
+        'text-slate-400', 'text-slate-300', 'text-emerald-400',
+        'border', 'border-emerald-500', 'opacity-30', 'cursor-pointer', 'cursor-not-allowed'
+    );
 
-    if (isShortAnswer) {
+    if (question.isShortAnswer) {
         // 簡答題使用特殊顏色（深綠色邊框）
         element.classList.add('bg-slate-700', 'text-emerald-400', 'border', 'border-emerald-500');
     } else if (state === 'correct') {
@@ -319,27 +422,53 @@ function updateCardItemColor(element, questionNum) {
     } else {
         element.classList.add('bg-slate-600', 'text-slate-300');
     }
+
+    // 不在篩選範圍內的題目淡化並停用
+    element.classList.add(inRange ? 'cursor-pointer' : 'cursor-not-allowed');
+    if (!inRange) element.classList.add('opacity-30');
+    element.disabled = !inRange;
 }
 
 /**
  * 更新單一答題卡格子
  */
 function updateSingleCardItem(questionNum) {
-    const container = document.getElementById('answerCard');
-    const items = container.querySelectorAll('.answer-card-item');
-    items.forEach(item => {
-        if (parseInt(item.textContent) === questionNum) {
-            updateCardItemColor(item, questionNum);
-        }
+    const item = document.querySelector(`#answerCard .answer-card-item[data-num="${questionNum}"]`);
+    if (!item) return;
+
+    const index = parseInt(item.dataset.index, 10);
+    updateCardItemColor(item, questions[index], getValidIndices().includes(index));
+}
+
+/**
+ * 重新整理答題卡的可用狀態
+ *
+ * 於篩選條件變更後呼叫，讓答題卡與導航邏輯保持一致。
+ */
+function refreshAnswerCardAvailability() {
+    if (questions.length === 0) return;
+
+    const validIndices = new Set(getValidIndices());
+    document.querySelectorAll('#answerCard .answer-card-item').forEach(item => {
+        const index = parseInt(item.dataset.index, 10);
+        updateCardItemColor(item, questions[index], validIndices.has(index));
     });
 }
 
 /**
  * 渲染當前題目
  */
-function renderQuestion() {
+/**
+ * 渲染當前題目
+ * @param {Object} [opts]
+ * @param {boolean} [opts.restartTimer=true] - 是否重新計時。
+ *        僅在「切換到不同題目」時才應重新計時；切換翻譯或關鍵字高亮
+ *        只是重繪同一題，重新計時等同於變相延長作答時間。
+ */
+function renderQuestion(opts = {}) {
     if (questions.length === 0) return;
 
+    const { restartTimer = true } = opts;
     const q = questions[currentIndex];
     hasAnswered = !!answerState[q.number];
     selectedOptions = [];
@@ -400,7 +529,7 @@ function renderQuestion() {
         imageWrapper.innerHTML = q.imagePaths.map((path, index) => `
             <div class="w-full flex flex-col items-center">
                 ${q.imagePaths.length > 1 ? `<p class="text-sm text-slate-400 mb-2">圖片 ${index + 1} / ${q.imagePaths.length}</p>` : ''}
-                <img src="${path}" alt="題目圖片 ${index + 1}"
+                <img src="${escapeHtml(path)}" alt="題目圖片 ${index + 1}"
                      class="max-w-full object-contain select-none shadow-2xl rounded border border-slate-700"
                      draggable="false">
             </div>
@@ -417,7 +546,7 @@ function renderQuestion() {
         imageContainer.innerHTML = q.imagePaths.map((path, index) => `
             <div class="flex flex-col items-center">
                 ${q.imagePaths.length > 1 ? `<p class="text-sm text-slate-400 mb-2">圖片 ${index + 1} / ${q.imagePaths.length}</p>` : ''}
-                <img src="${path}" alt="題目圖片 ${index + 1}"
+                <img src="${escapeHtml(path)}" alt="題目圖片 ${index + 1}" loading="lazy"
                      class="max-w-full rounded-lg border border-slate-600 shadow-lg cursor-pointer hover:border-blue-500 transition-colors"
                      onclick="openImageDialog()"
                      title="點擊放大查看">
@@ -429,8 +558,15 @@ function renderQuestion() {
     }
 
     // 顯示題目文字（支援反引號關鍵字高亮）
-    const questionText = showChinese ? q.chineseText : q.englishText;
+    // 若該題沒有中文翻譯，回退顯示英文原文，避免出現整片空白
+    const hasChinese = !!(q.chineseText && q.chineseText.trim());
+    const questionText = (showChinese && hasChinese) ? q.chineseText : q.englishText;
     document.getElementById('questionText').innerHTML = highlightKeywords(questionText);
+
+    const noTranslationHint = document.getElementById('noTranslationHint');
+    if (noTranslationHint) {
+        noTranslationHint.classList.toggle('hidden', !(showChinese && !hasChinese));
+    }
 
     // 更新翻譯按鈕狀態
     document.getElementById('translateBtnText').textContent = showChinese ? '顯示英文原文' : '顯示中文翻譯';
@@ -475,7 +611,10 @@ function renderQuestion() {
 
     // 啟動計時器（如果未作答）
     if (!hasAnswered && timerEnabled) {
-        startTimer(timerDuration);
+        // 同一題重繪時保留既有倒數，只有切換題目才重新計時
+        if (restartTimer || timerQuestionNum !== q.number || timerInterval === null) {
+            startTimer(timerDuration, q.number);
+        }
     } else {
         stopTimer();
     }
@@ -499,9 +638,11 @@ function renderOptions(question) {
     }
 
     const correctLetters = question.correctAnswer.split('');
+    const chosenLetters = (userAnswers[question.number] || '').split('').filter(Boolean);
 
     question.options.forEach(opt => {
         const isCorrect = correctLetters.includes(opt.letter);
+        const isChosen = chosenLetters.includes(opt.letter);
 
         const div = document.createElement('div');
         div.className = 'option-btn flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all';
@@ -512,6 +653,9 @@ function renderOptions(question) {
             div.classList.add('answered', 'cursor-default');
             if (isCorrect) {
                 div.classList.add('border-green-500', 'bg-green-500/10');
+            } else if (isChosen) {
+                // 標示使用者選錯的選項，讓答錯後能直接對照自己的選擇與正解
+                div.classList.add('border-red-500', 'bg-red-500/10');
             } else {
                 div.classList.add('border-slate-600', 'bg-slate-800/50');
             }
@@ -549,6 +693,8 @@ function renderOptions(question) {
             indicator.className = 'w-8 h-8 rounded-full border-2 flex items-center justify-center font-bold text-sm shrink-0';
             if (hasAnswered && isCorrect) {
                 indicator.classList.add('border-green-500', 'bg-green-500', 'text-white');
+            } else if (hasAnswered && isChosen) {
+                indicator.classList.add('border-red-500', 'bg-red-500', 'text-white');
             } else {
                 indicator.classList.add('border-slate-500', 'text-slate-400');
             }
@@ -591,6 +737,7 @@ function selectSingleOption(letter, question) {
     const isCorrect = letter === question.correctAnswer;
     hasAnswered = true;
     answerState[question.number] = isCorrect ? 'correct' : 'wrong';
+    userAnswers[question.number] = letter;
 
     // 停止計時器
     stopTimer();
@@ -630,6 +777,7 @@ function submitMultipleChoice() {
 
     hasAnswered = true;
     answerState[q.number] = isCorrect ? 'correct' : 'wrong';
+    userAnswers[q.number] = userAnswer;
 
     // 停止計時器
     stopTimer();
@@ -719,20 +867,23 @@ function showAnswerResult(question, isCorrect, userAnswer = '') {
                 答對了！
             </div>
         `;
-    } else {
-        resultEl.className = 'mt-6 p-4 rounded-xl bg-red-500/20 border border-red-500/50';
-        resultEl.innerHTML = `
-            <div class="flex items-center gap-2 text-red-400 font-semibold mb-2">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-                答錯了！
-            </div>
-            <p class="text-slate-300">
-                正確答案：<span class="text-green-400 font-bold">${question.correctAnswer}</span>
-            </p>
-        `;
+        return;
     }
+
+    // 重新作答時參數會帶入使用者答案；重繪已作答題目時則從紀錄取回
+    const chosen = userAnswer || userAnswers[question.number] || '';
+    resultEl.className = 'mt-6 p-4 rounded-xl bg-red-500/20 border border-red-500/50';
+    resultEl.innerHTML = `
+        <div class="flex items-center gap-2 text-red-400 font-semibold mb-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+            答錯了！
+        </div>
+        <p class="text-slate-300">
+            ${chosen ? `你的答案：<span class="text-red-400 font-bold">${escapeHtml(chosen)}</span>　｜　` : ''}正確答案：<span class="text-green-400 font-bold">${escapeHtml(question.correctAnswer)}</span>
+        </p>
+    `;
 }
 
 // ==================== 導航功能 ====================
@@ -774,20 +925,16 @@ function getValidRange() {
 }
 
 /**
- * 檢查當前題目是否在有效範圍內
- */
-function isInValidRange(index) {
-    const range = getValidRange();
-    return index >= range.startIdx && index <= range.endIdx;
-}
-
-/**
- * 取得有效的題目索引列表（考慮閱讀範圍、僅顯示重要題目和題型過濾設定）
+ * 取得有效的題目索引列表
+ *
+ * 套用所有篩選條件：閱讀範圍、僅顯示重要題目、僅複習錯題、題型過濾與關鍵字搜尋。
+ * 導航按鈕、答題卡與跳題功能皆以此為單一事實來源，確保行為一致。
  */
 function getValidIndices() {
     if (questions.length === 0) return [];
 
     const range = getValidRange();
+    const keyword = searchKeyword.trim().toLowerCase();
     const indices = [];
 
     for (let i = range.startIdx; i <= range.endIdx; i++) {
@@ -800,6 +947,14 @@ function getValidIndices() {
         if (!enabledQuestionTypes.includes(q.type)) {
             continue;
         }
+        // 過濾3：僅複習答錯的題目
+        if (wrongOnlyEnabled && answerState[q.number] !== 'wrong') {
+            continue;
+        }
+        // 過濾4：關鍵字搜尋（題號、題幹中英文與選項內容）
+        if (keyword && !matchesKeyword(q, keyword)) {
+            continue;
+        }
         indices.push(i);
     }
 
@@ -807,13 +962,22 @@ function getValidIndices() {
 }
 
 /**
- * 檢查索引是否在有效索引列表中
+ * 判斷題目是否符合搜尋關鍵字
+ * @param {Object} question - 題目物件
+ * @param {string} keyword - 已轉為小寫的關鍵字
+ * @returns {boolean}
  */
-function isValidIndex(index) {
-    if (!showImportantOnly) {
-        return isInValidRange(index);
-    }
-    return getValidIndices().includes(index);
+function matchesKeyword(question, keyword) {
+    if (String(question.number) === keyword) return true;
+
+    const haystack = [
+        question.englishText,
+        question.chineseText,
+        question.shortAnswer,
+        ...question.options.map(opt => opt.text)
+    ].filter(Boolean).join('\n').toLowerCase();
+
+    return haystack.includes(keyword);
 }
 
 /**
@@ -894,38 +1058,45 @@ function getRandomNextIndex() {
  */
 function jumpToQuestion() {
     const input = document.getElementById('jumpInput');
-    const num = parseInt(input.value);
+    const num = parseInt(input.value, 10);
+
+    if (Number.isNaN(num)) {
+        showToast('請輸入要跳轉的題號', 'warn');
+        return;
+    }
 
     // 尋找對應題號的索引
     const index = questions.findIndex(q => q.number === num);
-    if (index !== -1) {
-        const q = questions[index];
-
-        // 檢查是否在範圍內
-        if (rangeEnabled && !isInValidRange(index)) {
-            const range = getValidRange();
-            alert(`題目 ${num} 不在設定的閱讀範圍內（第 ${range.startNum} ~ ${range.endNum} 題）`);
-            return;
-        }
-
-        // 檢查是否為重要題目（如果啟用僅顯示重要題目）
-        if (showImportantOnly && !q.isImportant) {
-            alert(`題目 ${num} 不是重要題目，目前僅顯示重要題目`);
-            return;
-        }
-
-        // 檢查題型是否啟用
-        if (!enabledQuestionTypes.includes(q.type)) {
-            const typeNames = enabledQuestionTypes.join('、');
-            alert(`題目 ${num} 是「${q.type}」，目前僅顯示：${typeNames}`);
-            return;
-        }
-
-        currentIndex = index;
-        renderQuestion();
-    } else {
-        alert(`找不到第 ${num} 題`);
+    if (index === -1) {
+        showToast(`找不到第 ${num} 題`, 'error');
+        return;
     }
+
+    // 統一由 getValidIndices 判斷，避免各處篩選規則不一致
+    if (!getValidIndices().includes(index)) {
+        showToast(`第 ${num} 題不在目前的篩選範圍內（${describeActiveFilters()}）`, 'warn');
+        return;
+    }
+
+    currentIndex = index;
+    renderQuestion();
+}
+
+/**
+ * 描述目前啟用的篩選條件，用於提示訊息
+ * @returns {string}
+ */
+function describeActiveFilters() {
+    const parts = [];
+    if (rangeEnabled) {
+        const range = getValidRange();
+        parts.push(`範圍第 ${range.startNum}~${range.endNum} 題`);
+    }
+    if (showImportantOnly) parts.push('僅重要題目');
+    if (wrongOnlyEnabled) parts.push('僅錯題');
+    if (enabledQuestionTypes.length < 3) parts.push(`題型：${enabledQuestionTypes.join('、')}`);
+    if (searchKeyword.trim()) parts.push(`搜尋「${searchKeyword.trim()}」`);
+    return parts.length ? parts.join('、') : '無啟用的篩選';
 }
 
 /**
@@ -941,7 +1112,8 @@ function updateJumpInputMax() {
 // ==================== 翻譯切換 ====================
 function toggleTranslation() {
     showChinese = !showChinese;
-    renderQuestion();
+    // 僅重繪當前題目，不重置倒數計時
+    renderQuestion({ restartTimer: false });
 }
 
 // ==================== 統計功能 ====================
@@ -949,9 +1121,11 @@ function updateStats() {
     let correct = 0;
     let wrong = 0;
 
-    for (const num in answerState) {
-        if (answerState[num] === 'correct') correct++;
-        else if (answerState[num] === 'wrong') wrong++;
+    // 僅統計目前題庫實際存在的題號，避免殘留紀錄造成數字失真
+    for (const q of questions) {
+        const state = answerState[q.number];
+        if (state === 'correct') correct++;
+        else if (state === 'wrong') wrong++;
     }
 
     const total = correct + wrong;
@@ -978,49 +1152,79 @@ function updateStats() {
 }
 
 // ==================== 進度儲存 ====================
+/**
+ * 取得目前題庫的 localStorage 鍵名
+ *
+ * 以題庫識別碼作為命名空間，讓不同題庫的作答進度互不干擾。
+ * @param {string} key - 欄位名稱
+ * @returns {string} 完整鍵名
+ */
+function progressKey(key) {
+    return `quiz_${bankId}_${key}`;
+}
+
 function saveProgress() {
-    localStorage.setItem('sy0701_answerState', JSON.stringify(answerState));
-    localStorage.setItem('sy0701_currentIndex', currentIndex.toString());
+    try {
+        localStorage.setItem(progressKey('answerState'), JSON.stringify(answerState));
+        localStorage.setItem(progressKey('userAnswers'), JSON.stringify(userAnswers));
+        localStorage.setItem(progressKey('currentIndex'), currentIndex.toString());
+    } catch (e) {
+        console.warn('儲存進度失敗（可能已達儲存空間上限）', e);
+    }
 }
 
 function loadSavedProgress() {
+    answerState = {};
+    userAnswers = {};
+    currentIndex = 0;
+
     try {
-        const saved = localStorage.getItem('sy0701_answerState');
-        if (saved) {
-            answerState = JSON.parse(saved);
-        }
-        const savedIndex = localStorage.getItem('sy0701_currentIndex');
+        const saved = localStorage.getItem(progressKey('answerState'));
+        if (saved) answerState = JSON.parse(saved) || {};
+
+        const savedAnswers = localStorage.getItem(progressKey('userAnswers'));
+        if (savedAnswers) userAnswers = JSON.parse(savedAnswers) || {};
+
+        const savedIndex = localStorage.getItem(progressKey('currentIndex'));
         if (savedIndex !== null) {
-            currentIndex = parseInt(savedIndex);
+            const parsed = parseInt(savedIndex, 10);
             // 確保索引在有效範圍內
-            if (currentIndex >= questions.length) {
-                currentIndex = 0;
-            }
+            currentIndex = (Number.isNaN(parsed) || parsed >= questions.length || parsed < 0) ? 0 : parsed;
         }
     } catch (e) {
-        console.log('載入進度失敗');
+        console.warn('載入進度失敗，改以全新進度開始', e);
+        answerState = {};
+        userAnswers = {};
+        currentIndex = 0;
     }
 }
 
 function resetProgress() {
-    if (confirm('確定要重設所有答題進度嗎？')) {
-        answerState = {};
-        currentIndex = 0;
-        stopTimer();
-        localStorage.removeItem('sy0701_answerState');
-        localStorage.removeItem('sy0701_currentIndex');
-        generateAnswerCard();
-        renderQuestion();
-        updateStats();
-    }
+    if (!confirm('確定要重設所有答題進度嗎？')) return;
+
+    answerState = {};
+    userAnswers = {};
+    currentIndex = 0;
+    stopTimer();
+    localStorage.removeItem(progressKey('answerState'));
+    localStorage.removeItem(progressKey('userAnswers'));
+    localStorage.removeItem(progressKey('currentIndex'));
+    generateAnswerCard();
+    renderQuestion();
+    updateStats();
+    showToast('已重設答題進度', 'success');
 }
 
 // ==================== 倒數計時器功能 ====================
 /**
  * 啟動倒數計時器
+ *
+ * 以到期時間戳計算剩餘秒數，而非每秒遞減計數。
+ * 瀏覽器在背景分頁會節流 setInterval，逐次遞減會造成累積誤差。
  * @param {number} seconds - 計時時間（秒）
+ * @param {number|null} questionNum - 計時所屬題號
  */
-function startTimer(seconds = 60) {
+function startTimer(seconds = 60, questionNum = null) {
     if (!timerEnabled) return;
 
     // 停止現有計時器
@@ -1028,8 +1232,10 @@ function startTimer(seconds = 60) {
         clearInterval(timerInterval);
     }
 
-    timeRemaining = seconds;
     timerStartTime = seconds;
+    timerDeadline = Date.now() + seconds * 1000;
+    timerQuestionNum = questionNum;
+    timeRemaining = seconds;
     updateTimerDisplay();
 
     const timerBar = document.getElementById('timerBar');
@@ -1039,7 +1245,7 @@ function startTimer(seconds = 60) {
 
     // 每秒更新一次
     timerInterval = setInterval(() => {
-        timeRemaining--;
+        timeRemaining = Math.max(0, Math.ceil((timerDeadline - Date.now()) / 1000));
         updateTimerDisplay();
 
         // 時間到期
@@ -1048,7 +1254,7 @@ function startTimer(seconds = 60) {
             timerInterval = null;
             handleTimerExpired();
         }
-    }, 1000);
+    }, 250);
 }
 
 /**
@@ -1095,6 +1301,7 @@ function stopTimer() {
         clearInterval(timerInterval);
         timerInterval = null;
     }
+    timerQuestionNum = null;
 
     const timerBar = document.getElementById('timerBar');
     if (timerBar) {
@@ -1106,7 +1313,10 @@ function stopTimer() {
  * 處理計時器到期（震動效果）
  */
 function handleTimerExpired() {
-    const questionCard = document.querySelector('.bg-slate-800/50.backdrop-blur.rounded-2xl');
+    // 原以 class 選擇器取用題目卡片，但 Tailwind 的 `bg-slate-800/50` 含有
+    // 未跳脫的斜線，屬於非法 CSS 選擇器，querySelector 會直接拋出例外，
+    // 導致後續的震動與逾時提示全數失效。改以穩定的 id 取得元素。
+    const questionCard = document.getElementById('questionCard');
 
     if (questionCard) {
         // 添加震動 CSS 動畫類別
@@ -1137,9 +1347,45 @@ function handleTimerExpired() {
  * HTML 轉義
  */
 function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    return String(text ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+/**
+ * 顯示非阻塞式提示訊息
+ *
+ * 取代會中斷操作的 alert()，訊息會在數秒後自動消失。
+ * @param {string} message - 訊息內容
+ * @param {'info'|'success'|'warn'|'error'} [type='info'] - 訊息類型
+ */
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    if (!container) {
+        console.log(message);
+        return;
+    }
+
+    const styles = {
+        info: 'bg-slate-800 border-slate-600 text-slate-100',
+        success: 'bg-green-600/90 border-green-400 text-white',
+        warn: 'bg-amber-600/90 border-amber-400 text-white',
+        error: 'bg-red-600/90 border-red-400 text-white'
+    };
+
+    const toast = document.createElement('div');
+    toast.className = `pointer-events-auto px-4 py-2.5 rounded-lg border shadow-lg text-sm max-w-[90vw] ` +
+        `transition-opacity duration-300 ${styles[type] || styles.info}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.classList.add('opacity-0');
+        setTimeout(() => toast.remove(), 300);
+    }, 2600);
 }
 
 /**
@@ -1413,7 +1659,7 @@ async function verifyApiKey() {
     const key = input.value.trim();
 
     if (!key) {
-        alert('請輸入 GROQ API Key');
+        showToast('請輸入 GROQ API Key', 'warn');
         return;
     }
 
@@ -1458,11 +1704,33 @@ async function verifyApiKey() {
 }
 
 function populateModelDropdown() {
+    renderModelOptions(
+        availableModels.filter(m => m.includes('mixtral') || m.includes('gpt') || m.includes('llama'))
+    );
+}
+
+/**
+ * 渲染模型下拉選單
+ *
+ * 以 dataset 傳遞模型名稱並用事件委派處理點擊，
+ * 避免將未轉義的模型 id 直接內插進 onclick 字串。
+ * @param {string[]} models - 模型名稱列表
+ */
+function renderModelOptions(models) {
     const dropdown = document.getElementById('modelDropdown');
-    dropdown.innerHTML = availableModels
-        .filter(m => m.includes('mixtral') || m.includes('gpt') || m.includes('llama'))
-        .map(m => `<div class="px-4 py-2 hover:bg-slate-700 cursor-pointer text-sm" onclick="selectModel('${m}')">${m}</div>`)
+    if (!dropdown) return;
+
+    dropdown.innerHTML = models
+        .map(m => `<div class="px-4 py-2 hover:bg-slate-700 cursor-pointer text-sm" data-model="${escapeHtml(m)}">${escapeHtml(m)}</div>`)
         .join('');
+
+    if (!dropdown.dataset.bound) {
+        dropdown.addEventListener('click', (e) => {
+            const item = e.target.closest('[data-model]');
+            if (item) selectModel(item.dataset.model);
+        });
+        dropdown.dataset.bound = 'true';
+    }
 }
 
 function selectModel(modelId) {
@@ -1479,12 +1747,7 @@ function showModelDropdown() {
 
 function filterModels() {
     const input = document.getElementById('modelSearchInput').value.toLowerCase();
-    const dropdown = document.getElementById('modelDropdown');
-
-    const filtered = availableModels.filter(m => m.toLowerCase().includes(input));
-    dropdown.innerHTML = filtered.map(m =>
-        `<div class="px-4 py-2 hover:bg-slate-700 cursor-pointer text-sm" onclick="selectModel('${m}')">${m}</div>`
-    ).join('');
+    renderModelOptions(availableModels.filter(m => m.toLowerCase().includes(input)));
 }
 
 function toggleAdvancedSettings() {
@@ -1511,7 +1774,7 @@ function resetCustomPrompt() {
 
 function saveSettings() {
     if (!groqApiKey) {
-        alert('請先輸入並驗證 API Key');
+        showToast('請先輸入並驗證 API Key', 'warn');
         return;
     }
 
@@ -1530,29 +1793,49 @@ function saveSettings() {
 }
 
 // ==================== 進階設定 Dialog ====================
+/**
+ * 設定核取方塊的勾選狀態
+ *
+ * 以容錯方式存取，避免任何一個元素缺失就中斷整個對話框的狀態同步。
+ * @param {string} id - 元素 id
+ * @param {boolean} checked - 勾選狀態
+ */
+function setCheckbox(id, checked) {
+    const el = document.getElementById(id);
+    if (el) el.checked = checked;
+}
+
 function openAdvancedSettingsDialog() {
     document.getElementById('advancedSettingsDialog').classList.remove('hidden');
 
     // 載入已保存的設定
-    document.getElementById('rangeEnabledCheckbox').checked = rangeEnabled;
-    document.getElementById('showImportantOnlyCheckbox').checked = showImportantOnly;
-    document.getElementById('randomJumpCheckbox').checked = randomJumpEnabled;
-    document.getElementById('keywordHighlightCheckbox').checked = keywordHighlightEnabled;
+    setCheckbox('rangeEnabledCheckbox', rangeEnabled);
+    setCheckbox('showImportantOnlyCheckbox', showImportantOnly);
+    setCheckbox('wrongOnlyCheckbox', wrongOnlyEnabled);
+    setCheckbox('randomJumpCheckbox', randomJumpEnabled);
+    setCheckbox('keywordHighlightCheckbox', keywordHighlightEnabled);
 
     if (rangeEnabled) {
-        document.getElementById('rangeInputContainer').classList.remove('hidden');
-        document.getElementById('rangeStartInput').value = rangeStart;
-        document.getElementById('rangeEndInput').value = rangeEnd || '';
+        document.getElementById('rangeInputContainer')?.classList.remove('hidden');
+        const startInput = document.getElementById('rangeStartInput');
+        const endInput = document.getElementById('rangeEndInput');
+        if (startInput) startInput.value = rangeStart;
+        if (endInput) endInput.value = rangeEnd || '';
         updateRangeInfo();
     }
 
     if (showImportantOnly) {
-        document.getElementById('showImportantOnlyInfo').classList.remove('hidden');
+        document.getElementById('showImportantOnlyInfo')?.classList.remove('hidden');
         updateImportantOnlyInfo();
     }
 
+    if (wrongOnlyEnabled) {
+        document.getElementById('wrongOnlyInfo')?.classList.remove('hidden');
+    }
+    updateWrongOnlyInfo();
+
     if (randomJumpEnabled) {
-        document.getElementById('randomJumpInfo').classList.remove('hidden');
+        document.getElementById('randomJumpInfo')?.classList.remove('hidden');
     }
 
     // 初始化題型過濾設定
@@ -1587,6 +1870,7 @@ function toggleRangeEnabled() {
     if (showImportantOnly) {
         updateImportantOnlyInfo();
     }
+    applyFilterChange();
 }
 
 function toggleRandomJump() {
@@ -1606,8 +1890,100 @@ function toggleKeywordHighlight() {
     keywordHighlightEnabled = document.getElementById('keywordHighlightCheckbox').checked;
     localStorage.setItem('keyword_highlight_enabled', keywordHighlightEnabled);
 
-    // 重新渲染題目以套用新的設定
+    // 重新渲染題目以套用新的設定（不重置倒數計時）
     if (questions.length > 0) {
+        renderQuestion({ restartTimer: false });
+    }
+}
+
+/**
+ * 切換「僅複習答錯題目」模式
+ */
+function toggleWrongOnly() {
+    wrongOnlyEnabled = document.getElementById('wrongOnlyCheckbox').checked;
+    const info = document.getElementById('wrongOnlyInfo');
+
+    if (info) info.classList.toggle('hidden', !wrongOnlyEnabled);
+
+    localStorage.setItem('wrong_only_enabled', wrongOnlyEnabled);
+    updateWrongOnlyInfo();
+    applyFilterChange();
+}
+
+/**
+ * 更新錯題複習模式的資訊文字
+ */
+function updateWrongOnlyInfo() {
+    const infoText = document.getElementById('wrongOnlyInfoText');
+    if (!infoText || questions.length === 0) return;
+
+    const wrongCount = questions.filter(q => answerState[q.number] === 'wrong').length;
+    infoText.textContent = wrongCount > 0
+        ? `目前共有 ${wrongCount} 題答錯的題目`
+        : '目前沒有答錯的題目';
+}
+
+/**
+ * 執行關鍵字搜尋
+ */
+function applySearch() {
+    const input = document.getElementById('searchInput');
+    if (!input) return;
+
+    searchKeyword = input.value;
+    updateSearchInfo();
+    applyFilterChange();
+}
+
+/**
+ * 清除關鍵字搜尋
+ */
+function clearSearch() {
+    const input = document.getElementById('searchInput');
+    if (input) input.value = '';
+    searchKeyword = '';
+    updateSearchInfo();
+    applyFilterChange();
+}
+
+/**
+ * 更新搜尋結果的資訊文字
+ */
+function updateSearchInfo() {
+    const infoText = document.getElementById('searchInfoText');
+    if (!infoText) return;
+
+    if (!searchKeyword.trim()) {
+        infoText.classList.add('hidden');
+        return;
+    }
+
+    infoText.classList.remove('hidden');
+    const count = getValidIndices().length;
+    infoText.textContent = count > 0
+        ? `找到 ${count} 題符合「${searchKeyword.trim()}」`
+        : `沒有題目符合「${searchKeyword.trim()}」`;
+}
+
+/**
+ * 篩選條件變更後的共用處理
+ *
+ * 同步答題卡的可用狀態，並在目前題目被篩掉時跳到第一個有效題目。
+ */
+function applyFilterChange() {
+    if (questions.length === 0) return;
+
+    refreshAnswerCardAvailability();
+    updateTypeFilterInfo();
+
+    const validIndices = getValidIndices();
+    if (validIndices.length === 0) {
+        showToast('目前的篩選條件沒有符合的題目', 'warn');
+        return;
+    }
+
+    if (!validIndices.includes(currentIndex)) {
+        currentIndex = validIndices[0];
         renderQuestion();
     }
 }
@@ -1617,7 +1993,7 @@ function toggleQuestionType(type) {
 
     // 邊界檢查：至少保留一個題型
     if (index !== -1 && enabledQuestionTypes.length === 1) {
-        alert('至少需要選擇一種題型');
+        showToast('至少需要選擇一種題型', 'warn');
         updateQuestionTypeCheckboxes();
         return;
     }
@@ -1633,19 +2009,8 @@ function toggleQuestionType(type) {
     localStorage.setItem('enabled_question_types', JSON.stringify(enabledQuestionTypes));
 
     // 更新信息顯示
-    updateTypeFilterInfo();
     updateQuestionTypeCheckboxes();
-
-    // 如果當前題目被過濾，跳轉到第一個有效題目
-    if (questions.length > 0) {
-        const validIndices = getValidIndices();
-        if (validIndices.length === 0 || !validIndices.includes(currentIndex)) {
-            if (validIndices.length > 0) {
-                currentIndex = validIndices[0];
-                renderQuestion();
-            }
-        }
-    }
+    applyFilterChange();
 }
 
 function updateTypeFilterInfo() {
@@ -1685,15 +2050,7 @@ function toggleShowImportantOnly() {
     }
 
     localStorage.setItem('show_important_only', showImportantOnly);
-
-    // 如果當前題目不在有效範圍內，跳到第一個有效題目
-    if (questions.length > 0) {
-        const validIndices = getValidIndices();
-        if (validIndices.length > 0 && !validIndices.includes(currentIndex)) {
-            currentIndex = validIndices[0];
-            renderQuestion();
-        }
-    }
+    applyFilterChange();
 }
 
 /**
@@ -1731,6 +2088,7 @@ function updateRangeSettings() {
     if (showImportantOnly) {
         updateImportantOnlyInfo();
     }
+    applyFilterChange();
 }
 
 function updateRangeInfo() {
@@ -1749,6 +2107,7 @@ function resetRange() {
     localStorage.removeItem('range_start');
     localStorage.removeItem('range_end');
     updateJumpInputMax();
+    applyFilterChange();
 }
 
 // ==================== 手機版互動功能 ====================
@@ -1832,16 +2191,99 @@ function handleResize() {
 }
 
 // ==================== 鍵盤快捷鍵 ====================
+/**
+ * 判斷目前焦點是否位於輸入元件
+ *
+ * 避免在輸入框內按方向鍵時同時觸發換題。
+ * @returns {boolean}
+ */
+function isTypingContext(target) {
+    if (!target) return false;
+    return /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable;
+}
+
+/**
+ * 判斷是否有對話框或面板處於開啟狀態
+ * @returns {boolean}
+ */
+function isOverlayOpen() {
+    const overlayIds = ['imageDialog', 'settingsDialog', 'advancedSettingsDialog'];
+    if (overlayIds.some(id => !document.getElementById(id)?.classList.contains('hidden'))) return true;
+    if (isExplanationPanelOpen) return true;
+    return !!document.getElementById('mobileMenuPanel')?.classList.contains('open');
+}
+
 document.addEventListener('keydown', (e) => {
     if (!questions || questions.length === 0) return;
+    // 輸入中或有覆蓋層開啟時不攔截按鍵
+    if (isTypingContext(e.target) || isOverlayOpen()) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
 
     // 方向鍵導航
     if (e.key === 'ArrowUp' || e.key === 'ArrowRight') {
+        e.preventDefault();
         nextQuestion();
-    } else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') {
+        return;
+    }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') {
+        e.preventDefault();
         prevQuestion();
+        return;
+    }
+
+    const q = questions[currentIndex];
+    if (!q || q.isShortAnswer || hasAnswered) return;
+
+    // A~F 或 1~6 直接選擇對應選項
+    const letter = resolveOptionKey(e.key, q);
+    if (letter) {
+        e.preventDefault();
+        if (q.isMultiple) {
+            toggleOptionSelection(letter);
+        } else {
+            selectSingleOption(letter, q);
+        }
+        return;
+    }
+
+    // 多選題以 Enter 送出
+    if (e.key === 'Enter' && q.isMultiple && selectedOptions.length > 0) {
+        e.preventDefault();
+        submitMultipleChoice();
     }
 });
+
+/**
+ * 將按鍵轉換為選項代號
+ * @param {string} key - 按下的鍵
+ * @param {Object} question - 當前題目
+ * @returns {string|null} 選項代號，無對應時回傳 null
+ */
+function resolveOptionKey(key, question) {
+    const letters = question.options.map(opt => opt.letter);
+
+    const upper = key.toUpperCase();
+    if (letters.includes(upper)) return upper;
+
+    // 數字鍵對應第 N 個選項
+    if (/^[1-9]$/.test(key)) {
+        const index = parseInt(key, 10) - 1;
+        if (index < letters.length) return letters[index];
+    }
+    return null;
+}
+
+/**
+ * 切換多選題某個選項的勾選狀態（供鍵盤操作使用）
+ * @param {string} letter - 選項代號
+ */
+function toggleOptionSelection(letter) {
+    const checkbox = document.querySelector(`#optionsContainer input[data-letter="${letter}"]`);
+    if (!checkbox || checkbox.disabled) return;
+
+    checkbox.checked = !checkbox.checked;
+    checkbox.dispatchEvent(new Event('change'));
+}
 
 // ==================== 初始化 ====================
 document.addEventListener('DOMContentLoaded', () => {
@@ -1871,6 +2313,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const savedShowImportantOnly = localStorage.getItem('show_important_only');
     showImportantOnly = savedShowImportantOnly === 'true';
 
+    // 載入錯題複習設定
+    wrongOnlyEnabled = localStorage.getItem('wrong_only_enabled') === 'true';
+
     // 載入題型過濾設定
     const savedQuestionTypes = localStorage.getItem('enabled_question_types');
     if (savedQuestionTypes) {
@@ -1886,6 +2331,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 初始化懸浮解析視窗拖曳功能
     initExplanationPanelDrag();
+
+    // 答題卡以事件委派處理點擊，避免為上千格逐一綁定事件
+    document.getElementById('answerCard')?.addEventListener('click', handleAnswerCardClick);
+
+    // 搜尋輸入即時過濾（輸入停止後才觸發，避免大題庫逐字重算）
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        let searchTimer = null;
+        searchInput.addEventListener('input', () => {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(applySearch, 250);
+        });
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                clearTimeout(searchTimer);
+                applySearch();
+            }
+        });
+    }
 
     // 初始化手機版功能
     handleResize();
@@ -1904,6 +2368,19 @@ document.addEventListener('DOMContentLoaded', () => {
             // 優先關閉已開啟的面板
             const mobileMenuPanel = document.getElementById('mobileMenuPanel');
             const statsPanel = document.getElementById('statsPanel');
+
+            // 依疊放順序關閉對話框
+            const dialogs = [
+                ['imageDialog', closeImageDialog],
+                ['settingsDialog', closeSettingsDialog],
+                ['advancedSettingsDialog', closeAdvancedSettingsDialog]
+            ];
+            for (const [id, close] of dialogs) {
+                if (!document.getElementById(id)?.classList.contains('hidden')) {
+                    close();
+                    return;
+                }
+            }
 
             // 如果手機選單打開，關閉它
             if (mobileMenuPanel?.classList.contains('open')) {
@@ -1985,7 +2462,7 @@ async function analyzeWithAI() {
         if (savedKey) {
             groqApiKey = savedKey;
         } else {
-            alert('請先在設定中配置 GROQ API Key');
+            showToast('請先在設定中配置 GROQ API Key', 'warn');
             openSettingsDialog();
             return;
         }

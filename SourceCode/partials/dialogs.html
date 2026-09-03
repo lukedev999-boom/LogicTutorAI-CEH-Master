@@ -1,5 +1,5 @@
 <!-- 懸浮解析視窗 -->
-<div id="explanationPanel" class="floating-panel hidden" style="left: 16px; top: 100px; width: 400px; height: 500px;">
+<div id="explanationPanel" class="floating-panel hidden" role="dialog" aria-label="題目解析" style="left: 16px; top: 100px; width: 400px; height: 500px;">
     <!-- 視窗標題列（可拖曳） -->
     <div class="floating-panel-header" id="explanationPanelHeader">
         <h4 class="font-semibold text-white flex items-center gap-2">
@@ -24,7 +24,7 @@
 </div>
 
 <!-- 圖片 Dialog 彈窗 - 手機版全螢幕 -->
-<div id="imageDialog" class="fixed inset-0 z-[100] hidden" onclick="handleDialogBackdropClick(event)">
+<div id="imageDialog" class="fixed inset-0 z-[100] hidden" role="dialog" aria-modal="true" aria-label="題目圖片" onclick="handleDialogBackdropClick(event)">
     <!-- 背景遮罩 -->
     <div class="absolute inset-0 bg-black/85 backdrop-blur-sm"></div>
     <!-- Dialog 內容 -->
@@ -45,22 +45,35 @@
                     </svg>
                 </button>
             </div>
-            <!-- 圖片容器（支援多張圖片垂直排列） -->
-            <div id="imageContainer" class="image-container flex-1 min-h-0 overflow-auto bg-slate-950 relative">
+            <!-- 圖片容器（支援多張圖片垂直排列、滾輪縮放與拖曳平移） -->
+            <div id="imageContainer" class="image-container flex-1 min-h-0 overflow-auto bg-slate-950 relative"
+                 onwheel="handleWheel(event)"
+                 onmousedown="startDrag(event)"
+                 onmousemove="onDrag(event)"
+                 onmouseup="endDrag()"
+                 onmouseleave="endDrag()">
                 <div id="imageWrapper" class="w-full flex flex-col items-center gap-4 p-3 sm:p-4">
                     <!-- 圖片將由 JavaScript 動態生成 -->
                 </div>
             </div>
-            <!-- Dialog 底部提示 -->
-            <div class="px-4 py-2 border-t border-slate-700 bg-slate-800 text-center shrink-0 safe-area-bottom">
-                <p class="text-xs text-slate-500">滾動查看所有圖片 | <span class="hidden sm:inline"><kbd class="px-1.5 py-0.5 bg-slate-700 rounded text-xs">ESC</kbd> 關閉</span><span class="sm:hidden">點擊外部關閉</span></p>
+            <!-- Dialog 底部：縮放控制 -->
+            <div class="px-4 py-2 border-t border-slate-700 bg-slate-800 shrink-0 safe-area-bottom">
+                <div class="flex items-center justify-center gap-2 mb-1">
+                    <button onclick="zoomOut()" type="button" aria-label="縮小"
+                            class="w-9 h-9 flex items-center justify-center rounded-lg bg-slate-700 hover:bg-slate-600 active:bg-slate-500 transition text-white touch-target">−</button>
+                    <button onclick="resetZoom()" type="button"
+                            class="px-3 h-9 flex items-center justify-center rounded-lg bg-slate-700 hover:bg-slate-600 active:bg-slate-500 transition text-white text-xs touch-target">重設</button>
+                    <button onclick="zoomIn()" type="button" aria-label="放大"
+                            class="w-9 h-9 flex items-center justify-center rounded-lg bg-slate-700 hover:bg-slate-600 active:bg-slate-500 transition text-white touch-target">＋</button>
+                </div>
+                <p class="text-xs text-slate-500 text-center">滾輪縮放、放大後可拖曳平移 | <span class="hidden sm:inline"><kbd class="px-1.5 py-0.5 bg-slate-700 rounded text-xs">ESC</kbd> 關閉</span><span class="sm:hidden">點擊外部關閉</span></p>
             </div>
         </div>
     </div>
 </div>
 
 <!-- 設定 Dialog - 手機版全螢幕 -->
-<div id="settingsDialog" class="fixed inset-0 z-[100] hidden" onclick="handleSettingsBackdropClick(event)">
+<div id="settingsDialog" class="fixed inset-0 z-[100] hidden" role="dialog" aria-modal="true" aria-label="系統設定" onclick="handleSettingsBackdropClick(event)">
     <div class="absolute inset-0 bg-black/80 backdrop-blur-sm"></div>
     <div class="dialog-padding absolute inset-0 flex items-center justify-center p-0 sm:p-4 pointer-events-none">
         <div class="dialog-content settings-dialog-content relative bg-slate-900 sm:rounded-2xl border-0 sm:border border-slate-700 shadow-2xl w-full h-full sm:h-auto max-h-full sm:max-h-[90vh] sm:max-w-md overflow-y-auto pointer-events-auto" onclick="event.stopPropagation()">
@@ -165,7 +178,7 @@
 </div>
 
 <!-- 進階設定 Dialog - 手機版全螢幕 -->
-<div id="advancedSettingsDialog" class="fixed inset-0 z-[100] hidden" onclick="handleAdvancedSettingsBackdropClick(event)">
+<div id="advancedSettingsDialog" class="fixed inset-0 z-[100] hidden" role="dialog" aria-modal="true" aria-label="進階設定" onclick="handleAdvancedSettingsBackdropClick(event)">
     <div class="absolute inset-0 bg-black/80 backdrop-blur-sm"></div>
     <div class="dialog-padding absolute inset-0 flex items-center justify-center p-0 sm:p-4 pointer-events-none">
         <div class="dialog-content relative bg-slate-900 sm:rounded-2xl border-0 sm:border border-slate-700 shadow-2xl w-full h-full sm:h-auto max-h-full sm:max-h-[90vh] sm:max-w-md overflow-y-auto pointer-events-auto" onclick="event.stopPropagation()">
@@ -247,6 +260,48 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
                             <span>隨機跳題只會選擇未作答過的題目，已答對或已答錯的題目都會被排除。</span>
+                        </p>
+                    </div>
+                </div>
+
+                <div class="h-px bg-slate-700"></div>
+
+                <!-- 僅顯示重要題目 -->
+                <div class="space-y-3">
+                    <label class="flex items-center gap-3 cursor-pointer group touch-target">
+                        <input type="checkbox" id="showImportantOnlyCheckbox" class="checkbox-custom" onchange="toggleShowImportantOnly()">
+                        <div>
+                            <span class="text-sm font-medium text-slate-300 group-hover:text-white transition">僅顯示重要題目</span>
+                            <p class="text-xs text-slate-500 mt-0.5">只練習題號前標記星號（*）的題目</p>
+                        </div>
+                    </label>
+                    <div id="showImportantOnlyInfo" class="hidden bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+                        <p class="text-xs text-slate-400 flex items-start gap-2">
+                            <svg class="w-4 h-4 text-amber-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <span id="importantOnlyInfoText">共 -- 題重要題目</span>
+                        </p>
+                    </div>
+                </div>
+
+                <div class="h-px bg-slate-700"></div>
+
+                <!-- 錯題複習設定 -->
+                <div class="space-y-3">
+                    <label class="flex items-center gap-3 cursor-pointer group touch-target">
+                        <input type="checkbox" id="wrongOnlyCheckbox" class="checkbox-custom" onchange="toggleWrongOnly()">
+                        <div>
+                            <span class="text-sm font-medium text-slate-300 group-hover:text-white transition">僅複習答錯的題目</span>
+                            <p class="text-xs text-slate-500 mt-0.5">只練習先前作答錯誤的題目，適合考前衝刺</p>
+                        </div>
+                    </label>
+                    <div id="wrongOnlyInfo" class="hidden bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+                        <p class="text-xs text-slate-400 flex items-start gap-2">
+                            <svg class="w-4 h-4 text-red-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <span id="wrongOnlyInfoText">目前沒有答錯的題目</span>
                         </p>
                     </div>
                 </div>

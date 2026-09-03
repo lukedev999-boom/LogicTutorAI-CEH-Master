@@ -1,0 +1,14 @@
+{
+  "name": "logictutorai-quiz",
+  "version": "1.0.0",
+  "description": "純靜態測驗作答系統",
+  "private": true,
+  "scripts": {
+    "build:css": "tailwindcss -c tailwind.config.js -i assets/css/tailwind-src.css -o assets/vendor/tailwind.css --minify",
+    "build:html": "node build.js",
+    "build": "npm run build:css && npm run build:html"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  }
+}

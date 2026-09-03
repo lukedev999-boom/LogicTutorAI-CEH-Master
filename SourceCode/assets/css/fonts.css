@@ -1,0 +1,18 @@
+/**
+ * 本地字型定義（純靜態，無外部網路依賴）
+ *
+ * - 中文與介面字型：使用系統內建字型堆疊（PingFang TC / 微軟正黑體 / Noto Sans CJK），
+ *   避免內嵌數 MB 的 CJK 網頁字型，同時保有各平台的原生顯示品質。
+ * - 等寬字型：僅內嵌 JetBrains Mono 的 latin 子集（約 30 KB），供程式碼與數字使用。
+ */
+
+@font-face {
+    font-family: 'JetBrains Mono';
+    font-style: normal;
+    font-weight: 400 500;
+    font-display: swap;
+    src: url('../fonts/jetbrains-mono-latin.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+                   U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC,
+                   U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}

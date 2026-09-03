@@ -51,6 +51,9 @@
 2. 點擊「載入題庫」按鈕
 3. 選擇您的 Markdown 題庫檔案
 
+> 💡 以 `file://` 開啟時，瀏覽器的同源政策會阻擋自動讀取 `database.md`，
+> 系統會直接提示改用「載入題庫」按鈕選檔，功能不受影響。
+
 ### 方法三：使用本地伺服器（推薦）
 
 ```bash
@@ -332,19 +335,57 @@ CTIA/
     └── ...
 ```
 
+## 🔨 建置方式
+
+本專案的產出為純靜態檔案，建置僅在「修改原始碼」時才需要執行。
+
+```bash
+# 安裝建置期依賴（僅需一次）
+npm install
+
+# 完整建置：編譯 Tailwind CSS + 拼接 HTML partials
+npm run build
+
+# 或分開執行
+npm run build:css    # 產生 assets/vendor/tailwind.css
+npm run build:html   # 由 partials/ 產生 index.html
+```
+
+| 檔案 | 用途 |
+|---|---|
+| `index-template.html` | HTML 外框（head、資源引用） |
+| `partials/*.html` | 各區塊原始碼，**請修改這裡而非 index.html** |
+| `index.html` | 建置產物，會被覆寫 |
+| `tailwind.config.js` | Tailwind 設定與 safelist |
+
+> ⚠️ `index.html` 為自動產生，直接編輯會在下次建置時遺失。
+
 ## 🛠️ 技術架構
 
 ### 前端技術
 
 - **HTML5**：結構標記
-- **Tailwind CSS**：樣式框架（CDN）
+- **Tailwind CSS**：樣式框架（**預先編譯為靜態 CSS，執行期無 CDN 依賴**）
 - **Vanilla JavaScript**：核心邏輯（無框架依賴）
-- **LocalStorage API**：本地資料儲存
+- **LocalStorage API**：本地資料儲存（以題庫為單位隔離進度）
 
-### 外部服務
+### 純靜態運行
 
-- **GROQ API**：AI 解析服務
-- **Google Fonts**：字體服務（Noto Sans TC, JetBrains Mono）
+執行期**不依賴任何外部網路資源**，可完全離線使用，亦可直接以 `file://` 開啟：
+
+| 資源 | 位置 | 說明 |
+|---|---|---|
+| Tailwind CSS | `assets/vendor/tailwind.css` | 由 `npm run build:css` 預先編譯（約 32 KB） |
+| marked.js | `assets/vendor/marked.min.js` | Markdown 渲染 |
+| 等寬字型 | `assets/fonts/jetbrains-mono-latin.woff2` | 僅內嵌 latin 子集（約 31 KB） |
+| 中文字型 | 系統內建 | PingFang TC／微軟正黑體／Noto Sans CJK |
+
+> ⚠️ 修改 HTML 或 JS 中的 Tailwind 類別後，需重新執行 `npm run build:css`。
+> JS 動態附加的類別無法被靜態掃描，已列於 `tailwind.config.js` 的 `safelist`，新增時請一併補上。
+
+### 選用的外部服務
+
+- **GROQ API**：AI 解析服務（**選用**，僅在使用者自行設定 API Key 後才會連線）
 
 ### 核心功能模組
 

@@ -48,8 +48,18 @@ let timerStartTime = 0;        // 計時器開始時間
  */
 function parseQuestions(markdown) {
     const questions = [];
-    // 以 --- 分隔各題
-    const blocks = markdown.split(/---/).filter(block => block.trim());
+
+    // 遮蔽 fenced code block，避免說明用的範例語法被誤判為真實題目欄位
+    const codeBlocks = [];
+    const masked = markdown.replace(/```[\s\S]*?```/g, match => {
+        codeBlocks.push(match);
+        return `\u0000CB${codeBlocks.length - 1}\u0000`;
+    });
+    const restore = text => (text == null ? text
+        : text.replace(/\u0000CB(\d+)\u0000/g, (_, i) => codeBlocks[i]));
+
+    // 以「獨立成行」的 --- 分隔各題（避免表格分隔列 |---|---| 被誤判為分隔線）
+    const blocks = masked.split(/^[ \t]*-{3,}[ \t]*$/m).filter(block => block.trim());
 
     for (const block of blocks) {
         // 解析題號與題型（支援 ## *第 XXX 題 格式，星號表示重要題目）
@@ -64,15 +74,17 @@ function parseQuestions(markdown) {
         const isShortAnswer = questionType === '簡答題';
 
         // 解析英文題目
-        const englishMatch = block.match(/\*\*English:\*\*\s*([\s\S]*?)(?=\*\*中文：\*\*)/);
-        const englishText = englishMatch ? englishMatch[1].trim() : '';
+        const englishMatch = block.match(/\*\*English:\*\*\s*([\s\S]*?)(?=\*\*中文：\*\*|\*\*圖片[：:]?\*\*|\!\[|\*\*選項：\*\*|\*\*參考答案[：:]?\*\*|$)/);
+        const englishText = restore(englishMatch ? englishMatch[1].trim() : '');
 
         // 解析中文題目（簡答題可能後接 **圖片** 或 **參考答案**）
-        const chineseMatch = block.match(/\*\*中文：\*\*\s*([\s\S]*?)(?=(?:\!\[圖片\]|\*\*圖片\*\*|\*\*選項：\*\*|\*\*參考答案\*\*))/);
-        const chineseText = chineseMatch ? chineseMatch[1].trim() : '';
+        const chineseMatch = block.match(/\*\*中文：\*\*\s*([\s\S]*?)(?=(?:\*\*圖片[：:]?\*\*|\!\[|\*\*選項：\*\*|\*\*參考答案[：:]?\*\*|$))/);
+        const chineseText = restore(chineseMatch ? chineseMatch[1].trim() : '');
 
-        // 解析圖片（支援多張，支援兩種格式：直接 ![圖片] 或 **圖片** 區塊下的 ![圖片]）
-        const imageMatches = [...block.matchAll(/!\[圖片\]\((.*?)\)/g)];
+        // 解析圖片（支援多張、任意 alt 文字；僅掃描「題目解析」之前的區段，
+        // 避免解析內容中的示意圖被誤收為題目附圖）
+        const imageScope = block.split(/\*\*題目解析[：:]?\*\*/)[0];
+        const imageMatches = [...imageScope.matchAll(/!\[[^\]]*\]\(([^)]*)\)/g)];
         const imagePaths = imageMatches.map(m => m[1]);
 
         let options = [];
@@ -81,8 +93,8 @@ function parseQuestions(markdown) {
 
         if (isShortAnswer) {
             // 簡答題：解析參考答案區塊
-            const shortAnswerMatch = block.match(/\*\*參考答案\*\*\s*([\s\S]*?)(?=(?:\*\*題目解析\*\*|$))/);
-            shortAnswer = shortAnswerMatch ? shortAnswerMatch[1].trim() : null;
+            const shortAnswerMatch = block.match(/\*\*參考答案[：:]?\*\*\s*([\s\S]*?)(?=(?:\*\*題目解析[：:]?\*\*|$))/);
+            shortAnswer = restore(shortAnswerMatch ? shortAnswerMatch[1].trim() : null);
         } else {
             // 選擇題：解析選項
             const optionsMatch = block.match(/\*\*選項：\*\*\s*([\s\S]*?)(?=\*\*正確答案)/);
@@ -109,8 +121,8 @@ function parseQuestions(markdown) {
         }
 
         // 解析題目解析（可選欄位）
-        const explanationMatch = block.match(/\*\*題目解析\*\*\s*([\s\S]*?)(?=$)/);
-        const explanation = explanationMatch ? explanationMatch[1].trim() : null;
+        const explanationMatch = block.match(/\*\*題目解析[：:]?\*\*\s*([\s\S]*?)(?=$)/);
+        const explanation = restore(explanationMatch ? explanationMatch[1].trim() : null);
 
         questions.push({
             number: questionNum,

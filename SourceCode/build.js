@@ -24,7 +24,6 @@ const partialFiles = [
   'header.html',
   'mobile-menu.html',
   'main-content.html',
-  'stats-panel.html',
   'dialogs.html',
   'footer.html',
 ];

@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0f172a">
+    <title>測驗作答系統</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- 自訂 Tailwind 設定 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#0f172a',
+                        accent: '#3b82f6',
+                        success: '#22c55e',
+                        danger: '#ef4444',
+                        warm: '#f59e0b'
+                    },
+                    fontFamily: {
+                        display: ['Noto Sans TC', 'system-ui', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'Fira Code', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Marked.js for Markdown parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <!-- 自訂 CSS -->
+    <link rel="stylesheet" href="assets/css/main.css">
+    <link rel="stylesheet" href="assets/css/responsive.css">
+</head>
+<body class="text-gray-100">
+    <!-- 主容器 -->
+    <div id="app" class="min-h-screen flex flex-col">
+        <!-- 頂部導航列 -->
+        <header class="bg-slate-900/80 backdrop-blur-sm border-b border-slate-700 sticky top-0 z-50 safe-area-top">
+            <div class="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4 flex items-center justify-between">
+                <div class="flex items-center gap-2 sm:gap-3">
+                    <div class="w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-500 to-cyan-400 rounded-lg flex items-center justify-center font-bold text-base sm:text-lg shrink-0">
+                        L+
+                    </div>
+                    <div class="min-w-0">
+                        <h1 class="text-base sm:text-xl font-bold text-white truncate">測驗作答系統</h1>
+                        <p class="text-xs text-slate-400 hidden sm:block">Markdown 題庫練習工具</p>
+                    </div>
+                </div>
+                <!-- 桌面版導航按鈕 -->
+                <div class="desktop-nav flex items-center gap-2 sm:gap-3">
+                    <!-- 檔案選擇按鈕 -->
+                    <label class="cursor-pointer bg-slate-700 hover:bg-slate-600 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 touch-target">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                        </svg>
+                        <span class="hidden sm:inline">載入題庫</span>
+                        <input type="file" id="fileInput" accept=".md" class="hidden" onchange="loadFileFromInput(event)">
+                    </label>
+                    <!-- 重新載入按鈕 -->
+                    <button onclick="reloadQuestions()" class="bg-blue-600 hover:bg-blue-500 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 touch-target">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        <span class="hidden sm:inline">重新載入</span>
+                    </button>
+                    <!-- 設定按鈕 -->
+                    <button onclick="openSettingsDialog()" class="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg transition touch-target" title="AI 設定">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                    </button>
+                    <!-- 進階設定按鈕 -->
+                    <button onclick="openAdvancedSettingsDialog()" class="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg transition touch-target" title="進階設定">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                        </svg>
+                    </button>
+                </div>
+                <!-- 手機版漢堡選單按鈕 -->
+                <button onclick="openMobileMenu()" class="mobile-menu-btn bg-slate-700 hover:bg-slate-600 p-2.5 rounded-lg transition touch-target" style="display: none;">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- 手機版側邊選單 -->
+        <div id="mobileMenuPanel" class="mobile-menu-panel">
+            <button onclick="closeMobileMenu()" class="close-btn">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+            <div class="menu-content">
+                <h2 class="text-xl font-bold text-white mb-6 px-2">選單</h2>
+        
+                <!-- 載入題庫 -->
+                <label class="menu-item cursor-pointer">
+                    <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                    </svg>
+                    <span>載入題庫</span>
+                    <input type="file" accept=".md" class="hidden" onchange="loadFileFromInput(event); closeMobileMenu();">
+                </label>
+        
+                <!-- 重新載入 -->
+                <button onclick="reloadQuestions(); closeMobileMenu();" class="menu-item w-full text-left">
+                    <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    <span>重新載入題庫</span>
+                </button>
+        
+                <!-- AI 設定 -->
+                <button onclick="openSettingsDialog(); closeMobileMenu();" class="menu-item w-full text-left">
+                    <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                    </svg>
+                    <span>AI 設定 (GROQ)</span>
+                </button>
+        
+                <!-- 進階設定 -->
+                <button onclick="openAdvancedSettingsDialog(); closeMobileMenu();" class="menu-item w-full text-left">
+                    <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                    </svg>
+                    <span>進階設定</span>
+                </button>
+        
+                <!-- 下載範本 -->
+                <a href="sampleMd/sample.md" download class="menu-item" onclick="closeMobileMenu();">
+                    <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                    </svg>
+                    <span>下載 MD 格式範本</span>
+                </a>
+        
+                <div class="h-px bg-slate-700 my-4"></div>
+        
+                <!-- 查看答題統計 -->
+                <button onclick="toggleStatsPanel(); closeMobileMenu();" class="menu-item w-full text-left">
+                    <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                    <span>查看答題統計</span>
+                </button>
+        
+                <!-- 重設進度 -->
+                <button onclick="resetProgress(); closeMobileMenu();" class="menu-item w-full text-left">
+                    <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                    <span>重設答題進度</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 主內容區 -->
+        <main class="flex-1 max-w-7xl mx-auto w-full px-3 sm:px-4 py-4 sm:py-6">
+            <!-- 載入中狀態 -->
+            <div id="loadingState" class="flex flex-col items-center justify-center py-20">
+                <div class="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full loading-spinner mb-4"></div>
+                <p class="text-slate-400">正在載入題庫...</p>
+            </div>
+        
+            <!-- 無題庫狀態 -->
+            <div id="emptyState" class="hidden flex flex-col items-center justify-center py-20">
+                <div class="w-24 h-24 bg-slate-800 rounded-full flex items-center justify-center mb-6">
+                    <svg class="w-12 h-12 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-semibold text-white mb-2">尚未載入題庫</h2>
+                <p class="text-slate-400 mb-6 text-center">請點擊上方「載入題庫」按鈕選擇 Markdown 題庫檔案<br>或將 <code class="bg-slate-700 px-2 py-0.5 rounded text-sm">database.md</code> 放在同目錄下</p>
+                <div class="flex flex-col sm:flex-row items-center gap-4">
+                    <label class="cursor-pointer bg-blue-600 hover:bg-blue-500 px-6 py-3 rounded-lg font-medium transition flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                        </svg>
+                        選擇題庫檔案
+                        <input type="file" accept=".md" class="hidden" onchange="loadFileFromInput(event)">
+                    </label>
+                    <a href="sampleMd/sample.md" download class="bg-slate-700 hover:bg-slate-600 px-6 py-3 rounded-lg font-medium transition flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                        </svg>
+                        下載 MD 格式範本
+                    </a>
+                </div>
+            </div>
+        
+            <!-- 題目區域 -->
+            <div id="quizContainer" class="hidden grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6 main-content-area">
+                <!-- 左側：題目區 -->
+                <div class="lg:col-span-3 space-y-3 sm:space-y-4">
+                    <!-- 導航按鈕（移至題目卡片上方）- 手機版優化 -->
+                    <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-800/30 backdrop-blur rounded-xl px-3 sm:px-4 py-3 border border-slate-700/50">
+                        <!-- 上一題/下一題按鈕 - 手機版橫排 -->
+                        <div class="flex items-center justify-between sm:justify-start gap-2 order-2 sm:order-1">
+                            <button onclick="prevQuestion()" id="prevBtn" class="flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 bg-slate-700 hover:bg-slate-600 active:bg-slate-500 px-3 sm:px-5 py-2.5 rounded-lg font-medium transition disabled:opacity-50 disabled:cursor-not-allowed touch-target no-select">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                                </svg>
+                                <span class="text-sm sm:text-base">上一題</span>
+                            </button>
+        
+                            <button onclick="nextQuestion()" id="nextBtn" class="flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 bg-slate-700 hover:bg-slate-600 active:bg-slate-500 px-3 sm:px-5 py-2.5 rounded-lg font-medium transition disabled:opacity-50 disabled:cursor-not-allowed touch-target no-select">
+                                <span class="text-sm sm:text-base">下一題</span>
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                </svg>
+                            </button>
+                        </div>
+        
+                        <!-- 快速跳題 - 手機版置中 -->
+                        <div class="flex items-center justify-center gap-2 jump-controls order-1 sm:order-2">
+                            <span class="text-slate-400 text-xs sm:text-sm hidden sm:inline">跳至第</span>
+                            <input type="number" id="jumpInput" min="1" placeholder="題號" class="w-16 sm:w-20 bg-slate-800 border border-slate-600 rounded-lg px-2 sm:px-3 py-2 text-center text-white text-sm focus:outline-none focus:border-blue-500 touch-target" onkeypress="if(event.key==='Enter')jumpToQuestion()">
+                            <span class="text-slate-400 text-xs sm:text-sm hidden sm:inline">題</span>
+                            <button onclick="jumpToQuestion()" class="bg-blue-600 hover:bg-blue-500 active:bg-blue-400 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition touch-target no-select">跳轉</button>
+                        </div>
+                    </div>
+        
+                    <!-- 題目卡片 -->
+                    <div class="bg-slate-800/50 backdrop-blur rounded-2xl border border-slate-700 overflow-hidden">
+                        <!-- 題目頭部 - 手機版優化 -->
+                        <div class="bg-slate-800 px-3 sm:px-6 py-3 sm:py-4 border-b border-slate-700">
+                            <!-- 計時器區塊 - 倒數計時 -->
+                            <div id="timerBar" class="hidden -mx-3 sm:-mx-6 -mt-3 sm:-mt-4 mb-3 sm:mb-4 px-3 sm:px-6 py-2 bg-gradient-to-r from-amber-900/30 to-orange-900/30 border-b border-amber-700/50">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <svg class="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                        </svg>
+                                        <span class="text-xs sm:text-sm text-amber-400 font-medium">剩餘時間</span>
+                                    </div>
+                                    <div class="flex items-baseline gap-1">
+                                        <span id="timerMinutes" class="text-lg sm:text-xl font-mono font-bold text-amber-400">01</span>
+                                        <span class="text-amber-400 text-sm">:</span>
+                                        <span id="timerSeconds" class="text-lg sm:text-xl font-mono font-bold text-amber-400">00</span>
+                                    </div>
+                                </div>
+                                <!-- 進度條 -->
+                                <div class="mt-2 h-1 bg-slate-700 rounded-full overflow-hidden">
+                                    <div id="timerProgress" class="h-full bg-gradient-to-r from-amber-500 to-orange-400 transition-all duration-100" style="width: 100%"></div>
+                                </div>
+                            </div>
+        
+                            <div class="question-header-wrapper flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                <!-- 左側：題號和題型 -->
+                                <div class="question-header-left flex items-center gap-2 sm:gap-4 w-full sm:w-auto">
+                                    <!-- 解析提示按鈕（有解析時才顯示） -->
+                                    <button id="explanationBtn" onclick="toggleExplanationPanel()" class="hidden w-9 h-9 shrink-0 flex items-center justify-center rounded-lg bg-amber-500/20 hover:bg-amber-500/40 active:bg-amber-500/60 border border-amber-500/50 transition group touch-target" title="查看題目解析">
+                                        <svg class="w-5 h-5 text-amber-400 group-hover:text-amber-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                                        </svg>
+                                    </button>
+                                    <!-- 重要標籤（題目標題有星號時顯示） -->
+                                    <span id="importantBadge" class="hidden px-2 py-0.5 bg-red-500/20 text-red-400 border border-red-500/50 rounded text-xs font-bold">重要</span>
+                                    <span id="questionNumber" class="text-sm sm:text-lg font-bold text-white whitespace-nowrap">第 1 題 / 611 題</span>
+                                    <span id="questionType" class="px-2 sm:px-3 py-0.5 sm:py-1 bg-blue-600/20 text-blue-400 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap">單選題</span>
+                                </div>
+                                <!-- 右側：功能按鈕群組 - 手機版網格排列 -->
+                                <div class="question-header-right flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto">
+                                    <!-- 查看圖片按鈕（附圖片題才顯示） -->
+                                    <button id="viewImageBtn" onclick="openImageDialog()" class="hidden flex-1 sm:flex-none bg-amber-600 hover:bg-amber-500 active:bg-amber-400 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition flex items-center justify-center gap-1.5 sm:gap-2 touch-target no-select">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                        </svg>
+                                        <span class="hidden sm:inline">查看圖片</span>
+                                        <span class="sm:hidden">圖片</span>
+                                    </button>
+                                    <!-- 翻譯按鈕 -->
+                                    <button id="translateBtn" onclick="toggleTranslation()" class="flex-1 sm:flex-none bg-slate-700 hover:bg-slate-600 active:bg-slate-500 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition flex items-center justify-center gap-1.5 sm:gap-2 touch-target no-select">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/>
+                                        </svg>
+                                        <span id="translateBtnText" class="hidden sm:inline">顯示中文翻譯</span>
+                                        <span class="sm:hidden">翻譯</span>
+                                    </button>
+                                    <!-- AI 解析按鈕 -->
+                                    <button id="aiAnalyzeBtn" onclick="analyzeWithAI()" class="flex-1 sm:flex-none bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-500 hover:to-pink-400 active:from-purple-400 active:to-pink-300 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition flex items-center justify-center gap-1.5 sm:gap-2 shadow-lg shadow-purple-500/25 touch-target no-select">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                                        </svg>
+                                        <span class="hidden sm:inline">AI 解析</span>
+                                        <span class="sm:hidden">AI</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+        
+                        <!-- 題目內容 -->
+                        <div class="p-4 sm:p-6">
+                            <!-- 圖片區（如有） -->
+                            <div id="questionImage" class="hidden mb-6">
+                                <img id="questionImageSrc" src="" alt="題目圖片" class="max-w-full rounded-lg border border-slate-600">
+                            </div>
+        
+                            <!-- 題目文字 -->
+                            <div id="questionText" class="text-lg text-gray-200 leading-relaxed mb-8">
+                                <!-- 動態載入題目 -->
+                            </div>
+        
+                            <!-- 選項區 -->
+                            <div id="optionsContainer" class="space-y-3">
+                                <!-- 動態載入選項 -->
+                            </div>
+        
+                            <!-- 多選題提交按鈕 -->
+                            <div id="submitBtnContainer" class="hidden mt-6">
+                                <button onclick="submitMultipleChoice()" class="w-full bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 py-3 rounded-xl font-semibold text-white transition shadow-lg shadow-blue-500/25">
+                                    提交答案
+                                </button>
+                            </div>
+        
+                            <!-- 簡答題查看答案區塊 -->
+                            <div id="shortAnswerSection" class="hidden mt-6">
+                                <div class="border border-green-500/30 rounded-xl overflow-hidden">
+                                    <!-- 區塊標題 -->
+                                    <div class="bg-gradient-to-r from-green-600/20 to-emerald-500/20 px-5 py-3 border-b border-green-500/30 flex items-center gap-2">
+                                        <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                        </svg>
+                                        <h4 class="font-semibold text-white">參考答案</h4>
+                                    </div>
+                                    <!-- 查看答案按鈕 -->
+                                    <div id="showAnswerBtn" class="p-6 bg-slate-900/50 text-center">
+                                        <p class="text-slate-400 mb-4">此題為簡答題，請先自行思考後再查看答案</p>
+                                        <button onclick="showShortAnswer()" class="bg-gradient-to-r from-green-600 to-emerald-500 hover:from-green-500 hover:to-emerald-400 px-8 py-3 rounded-xl font-semibold text-white transition shadow-lg shadow-green-500/25">
+                                            查看參考答案
+                                        </button>
+                                    </div>
+                                    <!-- 答案內容 -->
+                                    <div id="shortAnswerContent" class="hidden p-6 bg-slate-900/50">
+                                        <!-- 動態載入答案內容 -->
+                                    </div>
+                                    <!-- 隱藏答案按鈕 -->
+                                    <div class="px-5 py-2 bg-slate-800/50 border-t border-green-500/20 text-center">
+                                        <button onclick="hideShortAnswer()" class="text-xs text-slate-400 hover:text-white transition">
+                                            收起答案
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+        
+                            <!-- 答題結果提示 -->
+                            <div id="resultMessage" class="hidden mt-6 p-4 rounded-xl">
+                                <!-- 動態顯示結果 -->
+                            </div>
+        
+                            <!-- AI 解析結果區塊 -->
+                            <div id="aiAnalysisSection" class="hidden mt-6">
+                                <div class="border border-purple-500/30 rounded-xl overflow-hidden">
+                                    <!-- 區塊標題 -->
+                                    <div class="bg-gradient-to-r from-purple-600/20 to-pink-500/20 px-5 py-3 border-b border-purple-500/30 flex items-center justify-between">
+                                        <h4 class="font-semibold text-white flex items-center gap-2">
+                                            <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                                            </svg>
+                                            AI 解析
+                                        </h4>
+                                        <button onclick="hideAiAnalysis()" class="text-slate-400 hover:text-white transition p-1">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                    <!-- 載入中狀態 -->
+                                    <div id="aiAnalysisLoading" class="hidden p-8 text-center bg-slate-900/50">
+                                        <div class="w-10 h-10 border-4 border-purple-500 border-t-transparent rounded-full loading-spinner mx-auto mb-3"></div>
+                                        <p class="text-slate-400 text-sm">AI 正在分析題目...</p>
+                                    </div>
+                                    <!-- 解析內容 -->
+                                    <div id="aiAnalysisContent" class="hidden p-6 bg-slate-900/50 text-gray-200">
+                                        <!-- 動態載入 AI 回覆 -->
+                                    </div>
+                                    <!-- 錯誤訊息 -->
+                                    <div id="aiAnalysisError" class="hidden p-6 bg-slate-900/50 text-center">
+                                        <p id="aiAnalysisErrorMsg" class="text-red-400 mb-3">發生錯誤</p>
+                                        <button onclick="analyzeWithAI()" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg text-sm transition">重試</button>
+                                    </div>
+                                    <!-- 底部提示 -->
+                                    <div class="px-5 py-2 bg-slate-800/50 border-t border-purple-500/20">
+                                        <p class="text-xs text-slate-500 text-center">由 GROQ AI 提供分析 | 結果僅供參考</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+        
+                <!-- 右側：答題卡與統計 - 手機版變成可切換的底部面板 -->
+                <div id="statsPanel" class="stats-panel space-y-4 lg:space-y-4">
+                    <!-- 手機版面板標題 -->
+                    <div class="lg:hidden flex items-center justify-between mb-2">
+                        <h2 class="text-lg font-bold text-white">答題狀態</h2>
+                        <button onclick="toggleStatsPanel()" class="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-700 hover:bg-slate-600 transition">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+        
+                    <!-- 統計卡片 -->
+                    <div class="bg-slate-800/50 lg:backdrop-blur rounded-2xl lg:border lg:border-slate-700 p-4 lg:p-5">
+                        <h3 class="text-base lg:text-lg font-bold text-white mb-3 lg:mb-4 flex items-center gap-2">
+                            <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                            </svg>
+                            答題統計
+                        </h3>
+                        <!-- 手機版橫向統計 / 桌面版縱向統計 -->
+                        <div class="flex lg:flex-col gap-4 lg:gap-0 lg:space-y-3">
+                            <div class="flex-1 lg:flex-none flex flex-col lg:flex-row items-center lg:items-center lg:justify-between text-center lg:text-left">
+                                <span class="text-slate-400 text-xs lg:text-base mb-1 lg:mb-0">答對</span>
+                                <span id="correctCount" class="text-xl lg:text-2xl font-bold text-green-400">0</span>
+                            </div>
+                            <div class="flex-1 lg:flex-none flex flex-col lg:flex-row items-center lg:items-center lg:justify-between text-center lg:text-left">
+                                <span class="text-slate-400 text-xs lg:text-base mb-1 lg:mb-0">答錯</span>
+                                <span id="wrongCount" class="text-xl lg:text-2xl font-bold text-red-400">0</span>
+                            </div>
+                            <div class="hidden lg:block h-px bg-slate-700 my-2"></div>
+                            <div class="flex-1 lg:flex-none flex flex-col lg:flex-row items-center lg:items-center lg:justify-between text-center lg:text-left">
+                                <span class="text-slate-400 text-xs lg:text-base mb-1 lg:mb-0">正確率</span>
+                                <span id="accuracy" class="text-xl lg:text-2xl font-bold text-blue-400">0%</span>
+                            </div>
+                        </div>
+                        <!-- 進度條 -->
+                        <div class="mt-3 lg:mt-3">
+                            <div class="h-2 bg-slate-700 rounded-full overflow-hidden">
+                                <div id="progressBar" class="h-full bg-gradient-to-r from-green-500 to-emerald-400 transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                            <p id="progressText" class="text-xs text-slate-500 mt-1 text-center">已作答 0 / 0 題</p>
+                        </div>
+                        <!-- 重設按鈕 -->
+                        <button onclick="resetProgress()" class="w-full mt-3 lg:mt-4 bg-slate-700 hover:bg-slate-600 active:bg-slate-500 py-2 rounded-lg text-sm font-medium transition touch-target no-select">
+                            重設進度
+                        </button>
+                    </div>
+        
+                    <!-- 答題卡 -->
+                    <div class="bg-slate-800/50 lg:backdrop-blur rounded-2xl lg:border lg:border-slate-700 p-4 lg:p-5">
+                        <h3 class="text-base lg:text-lg font-bold text-white mb-3 lg:mb-4 flex items-center gap-2">
+                            <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                            </svg>
+                            答題卡
+                        </h3>
+                        <div id="answerCard" class="answer-card-grid flex flex-wrap max-h-48 lg:max-h-80 overflow-y-auto overflow-x-hidden pr-1 hide-scrollbar" style="gap: 3px;">
+                            <!-- 動態生成題號格子 -->
+                        </div>
+                        <!-- 圖例 -->
+                        <div class="mt-3 lg:mt-4 flex flex-wrap items-center justify-center gap-3 lg:gap-4 text-xs text-slate-400">
+                            <div class="flex items-center gap-1">
+                                <div class="w-3 h-3 bg-green-500 rounded"></div>
+                                <span>正確</span>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <div class="w-3 h-3 bg-red-500 rounded"></div>
+                                <span>錯誤</span>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <div class="w-3 h-3 bg-slate-600 rounded"></div>
+                                <span>未作答</span>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <div class="w-3 h-3 bg-slate-700 border border-emerald-500 rounded"></div>
+                                <span>簡答</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        
+            <!-- 手機版統計面板切換按鈕 -->
+            <button id="statsToggleBtn" onclick="toggleStatsPanel()" class="stats-toggle-btn hidden">
+                <svg id="statsToggleIcon" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+            </button>
+        </main>
+
+        <!-- 懸浮解析視窗 -->
+        <div id="explanationPanel" class="floating-panel hidden" style="left: 16px; top: 100px; width: 400px; height: 500px;">
+            <!-- 視窗標題列（可拖曳） -->
+            <div class="floating-panel-header" id="explanationPanelHeader">
+                <h4 class="font-semibold text-white flex items-center gap-2">
+                    <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                    </svg>
+                    <span>題目解析</span>
+                    <span id="explanationQuestionNum" class="text-xs text-amber-400/70 ml-1"></span>
+                </h4>
+                <button onclick="closeExplanationPanel()" class="close-btn-mobile w-10 h-10 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg bg-red-500/20 sm:bg-transparent hover:bg-red-500/30 active:bg-red-500/50 transition text-red-400 hover:text-red-300 touch-target" title="關閉 (ESC)">
+                    <svg class="w-5 h-5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <!-- 解析內容 -->
+            <div class="floating-panel-body">
+                <div id="explanationContent" class="explanation-content">
+                    <!-- 動態載入 Markdown 解析後的 HTML -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- 圖片 Dialog 彈窗 - 手機版全螢幕 -->
+        <div id="imageDialog" class="fixed inset-0 z-[100] hidden" onclick="handleDialogBackdropClick(event)">
+            <!-- 背景遮罩 -->
+            <div class="absolute inset-0 bg-black/85 backdrop-blur-sm"></div>
+            <!-- Dialog 內容 -->
+            <div class="image-dialog-wrapper absolute inset-0 flex items-center justify-center p-0 sm:p-4 md:p-10 pointer-events-none">
+                <div class="image-dialog-content relative bg-slate-900 sm:rounded-2xl border-0 sm:border border-slate-700 shadow-2xl w-full h-full sm:h-auto sm:max-w-4xl sm:max-h-[90vh] overflow-hidden flex flex-col pointer-events-auto" onclick="event.stopPropagation()">
+                    <!-- Dialog 頭部 -->
+                    <div class="flex items-center justify-between px-4 py-3 border-b border-slate-700 bg-slate-800 shrink-0 safe-area-top">
+                        <h3 class="text-base font-bold text-white flex items-center gap-2">
+                            <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                            題目圖片
+                        </h3>
+                        <!-- 關閉按鈕 -->
+                        <button onclick="closeImageDialog()" class="w-10 h-10 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-red-600/80 hover:bg-red-500 active:bg-red-400 transition text-white touch-target" title="關閉">
+                            <svg class="w-5 h-5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <!-- 圖片容器（支援多張圖片垂直排列） -->
+                    <div id="imageContainer" class="image-container flex-1 min-h-0 overflow-auto bg-slate-950 relative">
+                        <div id="imageWrapper" class="w-full flex flex-col items-center gap-4 p-3 sm:p-4">
+                            <!-- 圖片將由 JavaScript 動態生成 -->
+                        </div>
+                    </div>
+                    <!-- Dialog 底部提示 -->
+                    <div class="px-4 py-2 border-t border-slate-700 bg-slate-800 text-center shrink-0 safe-area-bottom">
+                        <p class="text-xs text-slate-500">滾動查看所有圖片 | <span class="hidden sm:inline"><kbd class="px-1.5 py-0.5 bg-slate-700 rounded text-xs">ESC</kbd> 關閉</span><span class="sm:hidden">點擊外部關閉</span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 設定 Dialog - 手機版全螢幕 -->
+        <div id="settingsDialog" class="fixed inset-0 z-[100] hidden" onclick="handleSettingsBackdropClick(event)">
+            <div class="absolute inset-0 bg-black/80 backdrop-blur-sm"></div>
+            <div class="dialog-padding absolute inset-0 flex items-center justify-center p-0 sm:p-4 pointer-events-none">
+                <div class="dialog-content settings-dialog-content relative bg-slate-900 sm:rounded-2xl border-0 sm:border border-slate-700 shadow-2xl w-full h-full sm:h-auto max-h-full sm:max-h-[90vh] sm:max-w-md overflow-y-auto pointer-events-auto" onclick="event.stopPropagation()">
+                    <!-- Dialog 頭部 -->
+                    <div class="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-700 bg-slate-800 sm:rounded-t-2xl sticky top-0 z-10 safe-area-top">
+                        <h3 class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                            <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            </svg>
+                            AI 設定 (GROQ)
+                        </h3>
+                        <button onclick="closeSettingsDialog()" class="w-10 h-10 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg hover:bg-slate-700 active:bg-slate-600 transition text-slate-400 hover:text-white touch-target">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <!-- Dialog 內容 -->
+                    <div class="p-6 space-y-5">
+                        <!-- API Key 輸入 -->
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">GROQ API Key</label>
+                            <div class="flex gap-2">
+                                <input type="password" id="groqApiKeyInput" placeholder="gsk_xxxxxxxxxxxxxxxx"
+                                       class="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                                <button onclick="verifyApiKey()" id="verifyApiKeyBtn" class="bg-blue-600 hover:bg-blue-500 px-4 py-2.5 rounded-lg font-medium transition flex items-center gap-2 shrink-0">
+                                    <span id="verifyBtnText">確認</span>
+                                    <div id="verifySpinner" class="hidden w-4 h-4 border-2 border-white border-t-transparent rounded-full loading-spinner"></div>
+                                </button>
+                            </div>
+                            <p id="apiKeyStatus" class="mt-2 text-xs text-slate-500">輸入 API Key 後點擊確認以載入模型列表</p>
+                        </div>
+        
+                        <!-- 模型選擇（預設隱藏） -->
+                        <div id="modelSelectContainer" class="hidden">
+                            <label class="block text-sm font-medium text-slate-300 mb-2">選擇模型</label>
+                            <div class="relative">
+                                <input type="text" id="modelSearchInput" placeholder="搜尋模型..."
+                                       class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                                       oninput="filterModels()" onfocus="showModelDropdown()" autocomplete="off">
+                                <div id="modelDropdown" class="hidden absolute left-0 right-0 top-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-xl max-h-48 overflow-y-auto z-10">
+                                    <!-- 動態載入模型列表 -->
+                                </div>
+                            </div>
+                            <p id="selectedModelDisplay" class="mt-2 text-xs text-slate-400">已選擇：<span id="currentModelName" class="text-blue-400">未選擇</span></p>
+                        </div>
+        
+                        <!-- 進階設定（預設隱藏） -->
+                        <div id="advancedSettingsContainer" class="hidden">
+                            <div class="border-t border-slate-700 pt-5">
+                                <!-- 進階設定標題（可展開/收合） -->
+                                <button onclick="toggleAdvancedSettings()" class="w-full flex items-center justify-between text-left mb-3">
+                                    <label class="text-sm font-medium text-slate-300 flex items-center gap-2">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                                        </svg>
+                                        進階設定
+                                    </label>
+                                    <svg id="advancedSettingsIcon" class="w-5 h-5 text-slate-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                    </svg>
+                                </button>
+        
+                                <!-- 進階設定內容（預設隱藏） -->
+                                <div id="advancedSettingsContent" class="hidden">
+                                    <label class="block text-sm font-medium text-slate-300 mb-2">自訂提示詞</label>
+                                    <div class="space-y-2">
+                                        <textarea id="customPromptInput" rows="8"
+                                                  placeholder="請使用系統原生提示詞"
+                                                  class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-y font-mono"
+                                                  style="min-height: 150px;"></textarea>
+                                        <div class="flex items-center justify-between">
+                                            <p class="text-xs text-slate-500">留空將使用系統預設提示詞</p>
+                                            <div class="flex items-center gap-2">
+                                                <button onclick="loadSystemPrompt()" class="bg-blue-600/80 hover:bg-blue-500 px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5">
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0L8 8m4-4v12"/>
+                                                    </svg>
+                                                    載入系統預設
+                                                </button>
+                                                <button onclick="resetCustomPrompt()" class="bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5">
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                                    </svg>
+                                                    清空
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Dialog 底部 -->
+                    <div class="px-4 sm:px-6 py-3 sm:py-4 border-t border-slate-700 bg-slate-800/50 sm:rounded-b-2xl flex justify-end gap-2 sm:gap-3 sticky bottom-0 safe-area-bottom">
+                        <button onclick="closeSettingsDialog()" class="px-4 py-2.5 sm:py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 active:bg-slate-600 transition touch-target text-sm sm:text-base">取消</button>
+                        <button onclick="saveSettings()" class="bg-blue-600 hover:bg-blue-500 active:bg-blue-400 px-5 sm:px-6 py-2.5 sm:py-2 rounded-lg font-medium transition touch-target text-sm sm:text-base">儲存設定</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 進階設定 Dialog - 手機版全螢幕 -->
+        <div id="advancedSettingsDialog" class="fixed inset-0 z-[100] hidden" onclick="handleAdvancedSettingsBackdropClick(event)">
+            <div class="absolute inset-0 bg-black/80 backdrop-blur-sm"></div>
+            <div class="dialog-padding absolute inset-0 flex items-center justify-center p-0 sm:p-4 pointer-events-none">
+                <div class="dialog-content relative bg-slate-900 sm:rounded-2xl border-0 sm:border border-slate-700 shadow-2xl w-full h-full sm:h-auto max-h-full sm:max-h-[90vh] sm:max-w-md overflow-y-auto pointer-events-auto" onclick="event.stopPropagation()">
+                    <!-- Dialog 頭部 -->
+                    <div class="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-700 bg-slate-800 sm:rounded-t-2xl sticky top-0 z-10 safe-area-top">
+                        <h3 class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                            <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            </svg>
+                            進階設定
+                        </h3>
+                        <button onclick="closeAdvancedSettingsDialog()" class="w-10 h-10 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg hover:bg-slate-700 active:bg-slate-600 transition text-slate-400 hover:text-white touch-target">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <!-- Dialog 內容 -->
+                    <div class="p-4 sm:p-6 space-y-5">
+                        <!-- 閱讀範圍設定 -->
+                        <div class="space-y-3">
+                            <div class="flex items-center gap-2 mb-2">
+                                <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                </svg>
+                                <span class="text-sm font-medium text-slate-300">閱讀範圍</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <label class="flex items-center gap-3 cursor-pointer group touch-target flex-1">
+                                    <input type="checkbox" id="rangeEnabledCheckbox" class="checkbox-custom" onchange="toggleRangeEnabled()">
+                                    <span class="text-sm text-slate-400 group-hover:text-white transition">啟用範圍限制</span>
+                                </label>
+                            </div>
+                            <div id="rangeInputContainer" class="hidden">
+                                <div class="flex items-center gap-2 mt-3">
+                                    <div class="flex-1">
+                                        <label class="block text-xs text-slate-500 mb-1">起始題號</label>
+                                        <input type="number" id="rangeStartInput" min="1" placeholder="1"
+                                               class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-center text-white text-sm focus:outline-none focus:border-cyan-500 touch-target"
+                                               onchange="updateRangeSettings()">
+                                    </div>
+                                    <span class="text-slate-500 mt-5">~</span>
+                                    <div class="flex-1">
+                                        <label class="block text-xs text-slate-500 mb-1">結束題號</label>
+                                        <input type="number" id="rangeEndInput" min="1" placeholder="全部"
+                                               class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-center text-white text-sm focus:outline-none focus:border-cyan-500 touch-target"
+                                               onchange="updateRangeSettings()">
+                                    </div>
+                                </div>
+                                <div id="rangeInfo" class="mt-2 bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+                                    <p class="text-xs text-slate-400 flex items-start gap-2">
+                                        <svg class="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                        </svg>
+                                        <span id="rangeInfoText">目前範圍：第 1 題 ~ 第 -- 題（共 -- 題）</span>
+                                    </p>
+                                </div>
+                                <button onclick="resetRange()" class="mt-2 w-full bg-slate-700 hover:bg-slate-600 active:bg-slate-500 py-2 rounded-lg text-xs font-medium transition touch-target">
+                                    重設為全部題目
+                                </button>
+                            </div>
+                        </div>
+        
+                        <div class="h-px bg-slate-700"></div>
+        
+                        <!-- 隨機跳題設定 -->
+                        <div class="space-y-3">
+                            <label class="flex items-center gap-3 cursor-pointer group touch-target">
+                                <input type="checkbox" id="randomJumpCheckbox" class="checkbox-custom" onchange="toggleRandomJump()">
+                                <div>
+                                    <span class="text-sm font-medium text-slate-300 group-hover:text-white transition">隨機跳題</span>
+                                    <p class="text-xs text-slate-500 mt-0.5">啟用後，下一題與自動跳題將隨機選擇題目</p>
+                                </div>
+                            </label>
+                            <div id="randomJumpInfo" class="hidden bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+                                <p class="text-xs text-slate-400 flex items-start gap-2">
+                                    <svg class="w-4 h-4 text-blue-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    <span>隨機跳題只會選擇未作答過的題目，已答對或已答錯的題目都會被排除。</span>
+                                </p>
+                            </div>
+                        </div>
+        
+                        <div class="h-px bg-slate-700"></div>
+        
+                        <!-- 關鍵字高亮設定 -->
+                        <div class="space-y-3">
+                            <label class="flex items-center gap-3 cursor-pointer group touch-target">
+                                <input type="checkbox" id="keywordHighlightCheckbox" class="checkbox-custom" onchange="toggleKeywordHighlight()" checked>
+                                <div>
+                                    <span class="text-sm font-medium text-slate-300 group-hover:text-white transition">關鍵字高亮</span>
+                                    <p class="text-xs text-slate-500 mt-0.5">啟用後，題目中以反引號標記的關鍵字會以紅色顯示</p>
+                                </div>
+                            </label>
+                        </div>
+        
+                        <div class="h-px bg-slate-700"></div>
+        
+                        <!-- 題型過濾設定 -->
+                        <div class="space-y-3">
+                            <div class="flex items-center gap-2 mb-2">
+                                <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                                </svg>
+                                <span class="text-sm font-medium text-slate-300">題型過濾</span>
+                            </div>
+                            <div class="space-y-2">
+                                <label class="flex items-center gap-3 cursor-pointer group touch-target">
+                                    <input type="checkbox" id="singleChoiceCheckbox" class="checkbox-custom" onchange="toggleQuestionType('單選題')" checked>
+                                    <span class="text-sm text-slate-400 group-hover:text-white transition">單選題</span>
+                                </label>
+                                <label class="flex items-center gap-3 cursor-pointer group touch-target">
+                                    <input type="checkbox" id="multipleChoiceCheckbox" class="checkbox-custom" onchange="toggleQuestionType('多選題')" checked>
+                                    <span class="text-sm text-slate-400 group-hover:text-white transition">多選題</span>
+                                </label>
+                                <label class="flex items-center gap-3 cursor-pointer group touch-target">
+                                    <input type="checkbox" id="shortAnswerCheckbox" class="checkbox-custom" onchange="toggleQuestionType('簡答題')" checked>
+                                    <span class="text-sm text-slate-400 group-hover:text-white transition">簡答題</span>
+                                </label>
+                            </div>
+                            <div id="typeFilterInfo" class="mt-2 bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+                                <p class="text-xs text-slate-400 flex items-start gap-2">
+                                    <svg class="w-4 h-4 text-green-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    <span id="typeFilterInfoText">已選題型：單選題、多選題、簡答題（-- 題）</span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Dialog 底部 -->
+                    <div class="px-4 sm:px-6 py-3 sm:py-4 border-t border-slate-700 bg-slate-800/50 sm:rounded-b-2xl flex justify-end gap-3 sticky bottom-0 safe-area-bottom">
+                        <button onclick="closeAdvancedSettingsDialog()" class="px-4 py-2.5 sm:py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 active:bg-slate-600 transition touch-target text-sm sm:text-base">關閉</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 頁尾 -->
+        <footer class="bg-slate-900/50 border-t border-slate-800 py-4">
+            <p class="text-center text-slate-500 text-sm">
+                測驗作答系統 | Markdown 題庫練習工具
+            </p>
+        </footer>
+
+    </div>
+
+    <!-- 核心 JavaScript -->
+    <script src="assets/js/main.js"></script>
+    <script src="assets/js/ui.js"></script>
+    <script src="assets/js/handlers.js"></script>
+</body>
+</html>

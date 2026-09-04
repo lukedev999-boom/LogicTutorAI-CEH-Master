@@ -149,16 +149,6 @@
                     <!-- 無中文翻譯時的提示 -->
                     <p id="noTranslationHint" class="hidden mb-4 text-sm text-amber-400">此題沒有中文翻譯，已顯示英文原文</p>
 
-                    <!-- 作答方式提示 -->
-                    <p class="text-xs text-slate-500 mb-4">
-                        <span class="inline-flex items-center gap-1">
-                            💡 <strong class="text-slate-400">雙擊</strong>選項作答，或直接按鍵盤
-                            <kbd class="px-1.5 py-0.5 bg-slate-700 rounded text-slate-300 font-mono">A</kbd>~<kbd class="px-1.5 py-0.5 bg-slate-700 rounded text-slate-300 font-mono">D</kbd>
-                            ／<kbd class="px-1.5 py-0.5 bg-slate-700 rounded text-slate-300 font-mono">1</kbd>~<kbd class="px-1.5 py-0.5 bg-slate-700 rounded text-slate-300 font-mono">4</kbd>
-                            選擇；多選題按 <kbd class="px-1.5 py-0.5 bg-slate-700 rounded text-slate-300 font-mono">Enter</kbd> 送出
-                        </span>
-                    </p>
-
                     <!-- 選項區 -->
                     <div id="optionsContainer" class="space-y-3" role="group" aria-label="作答選項">
                         <!-- 動態載入選項 -->
@@ -245,6 +235,14 @@
                     </div>
                 </div>
             </div>
+
+            <!-- 作答方式提示（常駐顯示於題目卡片下方） -->
+            <p class="text-xs text-slate-500 text-center px-2">
+                💡 <strong class="text-slate-400">雙擊</strong>選項作答，或直接按鍵盤
+                <kbd class="px-1.5 py-0.5 bg-slate-700 rounded text-slate-300 font-mono">A</kbd>~<kbd class="px-1.5 py-0.5 bg-slate-700 rounded text-slate-300 font-mono">D</kbd>
+                ／<kbd class="px-1.5 py-0.5 bg-slate-700 rounded text-slate-300 font-mono">1</kbd>~<kbd class="px-1.5 py-0.5 bg-slate-700 rounded text-slate-300 font-mono">4</kbd>
+                選擇；多選題按 <kbd class="px-1.5 py-0.5 bg-slate-700 rounded text-slate-300 font-mono">Enter</kbd> 送出
+            </p>
         </div>
 
         <!-- 右側：答題卡與統計 - 手機版變成可切換的底部面板 -->

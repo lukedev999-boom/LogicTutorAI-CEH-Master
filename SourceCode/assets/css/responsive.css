@@ -348,12 +348,32 @@
    安全區域適配 (iPhone X+ 瀏海和底部)
    ======================================== */
 
-@supports (padding-top: env(safe-area-inset-top)) {
-    .safe-area-top {
-        padding-top: env(safe-area-inset-top);
+/*
+ * 安全區域間距必須「追加」而非「取代」元素既有的 padding。
+ *
+ * env(safe-area-inset-*) 在沒有瀏海的裝置上為 0，若直接指定
+ * `padding-top: env(...)`，會把 Tailwind 的 py-* 覆蓋成 0——自訂樣式
+ * 的載入順序在 Tailwind 之後、特異性又相同，因此必定勝出，使對話框
+ * 的標題與底部按鈕貼齊邊緣。
+ *
+ * 同時限縮於行動裝置：瀏海僅存在於行動裝置，且對話框也只有在此斷點
+ * 才是全螢幕、真正需要避開系統 UI。
+ *
+ * 基準值以 CSS 變數提供，元素若使用不同的 padding 可個別覆寫。
+ */
+@media (max-width: 640px) {
+    @supports (padding-top: env(safe-area-inset-top)) {
+        .safe-area-top {
+            padding-top: calc(var(--safe-area-base-top, 0.75rem) + env(safe-area-inset-top));
+        }
+        .safe-area-bottom {
+            padding-bottom: calc(var(--safe-area-base-bottom, 0.75rem) + env(safe-area-inset-bottom));
+        }
     }
-    .safe-area-bottom {
-        padding-bottom: env(safe-area-inset-bottom);
+
+    /* 圖片對話框底部使用 py-2，基準值需對應調整 */
+    .image-dialog-content .safe-area-bottom {
+        --safe-area-base-bottom: 0.5rem;
     }
 }
 

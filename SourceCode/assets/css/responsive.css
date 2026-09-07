@@ -171,7 +171,9 @@
         padding: 0;
         max-height: 0;
         overflow: hidden;
-        transition: max-height 0.3s ease, padding 0.3s ease;
+        transition:
+            max-height 0.3s ease,
+            padding 0.3s ease;
     }
     .stats-panel.open {
         max-height: 80vh;
@@ -367,7 +369,9 @@
             padding-top: calc(var(--safe-area-base-top, 0.75rem) + env(safe-area-inset-top));
         }
         .safe-area-bottom {
-            padding-bottom: calc(var(--safe-area-base-bottom, 0.75rem) + env(safe-area-inset-bottom));
+            padding-bottom: calc(
+                var(--safe-area-base-bottom, 0.75rem) + env(safe-area-inset-bottom)
+            );
         }
     }
 

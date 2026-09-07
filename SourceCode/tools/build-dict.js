@@ -47,15 +47,19 @@ const MAX_TOTAL = 62;
 function download(url, dest) {
     return new Promise((resolve, reject) => {
         const file = fs.createWriteStream(dest);
-        const get = (u) => https.get(u, (res) => {
-            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-                res.resume();
-                return get(res.headers.location);
-            }
-            if (res.statusCode !== 200) return reject(new Error(`HTTP ${res.statusCode} — ${u}`));
-            res.pipe(file);
-            file.on('finish', () => file.close(resolve));
-        }).on('error', reject);
+        const get = (u) =>
+            https
+                .get(u, (res) => {
+                    if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+                        res.resume();
+                        return get(res.headers.location);
+                    }
+                    if (res.statusCode !== 200)
+                        return reject(new Error(`HTTP ${res.statusCode} — ${u}`));
+                    res.pipe(file);
+                    file.on('finish', () => file.close(resolve));
+                })
+                .on('error', reject);
         get(url);
     });
 }
@@ -88,17 +92,31 @@ function parseCsv(text, onRow) {
         const ch = text[i];
         if (quoted) {
             if (ch === '"') {
-                if (text[i + 1] === '"') { field += '"'; i++; }
-                else quoted = false;
+                if (text[i + 1] === '"') {
+                    field += '"';
+                    i++;
+                } else quoted = false;
             } else field += ch;
             continue;
         }
-        if (ch === '"') { quoted = true; }
-        else if (ch === ',') { row.push(field); field = ''; }
-        else if (ch === '\n') { row.push(field); onRow(row); row = []; field = ''; }
-        else if (ch !== '\r') { field += ch; }
+        if (ch === '"') {
+            quoted = true;
+        } else if (ch === ',') {
+            row.push(field);
+            field = '';
+        } else if (ch === '\n') {
+            row.push(field);
+            onRow(row);
+            row = [];
+            field = '';
+        } else if (ch !== '\r') {
+            field += ch;
+        }
     }
-    if (field || row.length) { row.push(field); onRow(row); }
+    if (field || row.length) {
+        row.push(field);
+        onRow(row);
+    }
 }
 
 const toInt = (v) => {
@@ -149,13 +167,16 @@ function collectCorpusWords() {
     for (const file of files) {
         const md = fs.readFileSync(file, 'utf8');
         for (const block of md.split(/\n## /)) {
-            const en = block.match(/\*\*English[:：]?\*\*\s*([\s\S]*?)(?=\n\*\*中文|\n\*\*圖片|\n\*\*選項|\n\*\*參考答案|$)/);
+            const en = block.match(
+                /\*\*English[:：]?\*\*\s*([\s\S]*?)(?=\n\*\*中文|\n\*\*圖片|\n\*\*選項|\n\*\*參考答案|$)/,
+            );
             const parts = en ? [en[1]] : [];
             for (const m of block.matchAll(/^-\s+[A-F]\.\s*(.+)$/gm)) {
                 parts.push(m[1].replace(/（.+?）/g, ''));
             }
             for (const text of parts) {
-                for (const w of text.matchAll(/[A-Za-z][A-Za-z'-]*/g)) words.add(w[0].toLowerCase());
+                for (const w of text.matchAll(/[A-Za-z][A-Za-z'-]*/g))
+                    words.add(w[0].toLowerCase());
             }
         }
     }
@@ -176,16 +197,21 @@ async function main() {
 
     console.log('\n[3/5] 解析 ECDICT');
     const csv = fs.readFileSync(path.join(CACHE, 'ecdict.csv'), 'utf8');
-    const raw = new Map();       // word → 簡體釋義
-    const exchange = new Map();  // 變形 → 原形（來自 ECDICT exchange 欄）
+    const raw = new Map(); // word → 簡體釋義
+    const exchange = new Map(); // 變形 → 原形（來自 ECDICT exchange 欄）
     let header = null;
     let total = 0;
 
     parseCsv(csv, (row) => {
-        if (!header) { header = row; return; }
+        if (!header) {
+            header = row;
+            return;
+        }
         total++;
         const rec = {};
-        header.forEach((k, i) => { rec[k] = row[i] || ''; });
+        header.forEach((k, i) => {
+            rec[k] = row[i] || '';
+        });
 
         const word = rec.word.trim().toLowerCase();
         const translation = rec.translation.trim();
@@ -200,10 +226,11 @@ async function main() {
             }
         }
 
-        const isCommon = (toInt(rec.bnc) > 0 && toInt(rec.bnc) <= FREQ_LIMIT)
-            || (toInt(rec.frq) > 0 && toInt(rec.frq) <= FREQ_LIMIT)
-            || toInt(rec.collins) > 0
-            || toInt(rec.oxford) > 0;
+        const isCommon =
+            (toInt(rec.bnc) > 0 && toInt(rec.bnc) <= FREQ_LIMIT) ||
+            (toInt(rec.frq) > 0 && toInt(rec.frq) <= FREQ_LIMIT) ||
+            toInt(rec.collins) > 0 ||
+            toInt(rec.oxford) > 0;
 
         // 常用詞一律收錄；非常用詞只在題庫實際用到時收錄（例：phishing、rootkit）
         if ((isCommon || corpus.has(word)) && !raw.has(word)) raw.set(word, translation);
@@ -233,27 +260,36 @@ async function main() {
     const lemma = {};
     let skippedByRule = 0;
     for (const [variant, base] of inverse) {
-        if (!(base in dict)) continue;        // 原形不在詞典裡，記了也查不到
-        if (variant in dict) continue;         // 變形本身已有獨立詞條
-        if (lemmaCandidates(variant).includes(base)) { skippedByRule++; continue; }
+        if (!(base in dict)) continue; // 原形不在詞典裡，記了也查不到
+        if (variant in dict) continue; // 變形本身已有獨立詞條
+        if (lemmaCandidates(variant).includes(base)) {
+            skippedByRule++;
+            continue;
+        }
         lemma[variant] = base;
     }
-    console.log(`  ✓ 保留 ${Object.keys(lemma).length} 條不規則變形（另有 ${skippedByRule} 條可由規則推導，已略過）`);
+    console.log(
+        `  ✓ 保留 ${Object.keys(lemma).length} 條不規則變形（另有 ${skippedByRule} 條可由規則推導，已略過）`,
+    );
 
     if (!fs.existsSync(OUT_DIR)) fs.mkdirSync(OUT_DIR, { recursive: true });
-    const banner = (name) => `/* 自動產生，請勿手動編輯 —— 執行 \`npm run build:dict\` 重新產生。\n`
-        + `   資料來源：ECDICT (MIT License) https://github.com/skywind3000/ECDICT\n`
-        + `   ${name} */\n`;
+    const banner = (name) =>
+        `/* 自動產生，請勿手動編輯 —— 執行 \`npm run build:dict\` 重新產生。\n` +
+        `   資料來源：ECDICT (MIT License) https://github.com/skywind3000/ECDICT\n` +
+        `   ${name} */\n`;
 
     // 以 JSON.parse(字串) 而非物件字面量輸出：V8 對前者有專用的快速解析路徑，
     // 在這種 MB 級資料上明顯快於逐一建構物件屬性。
-    const asScript = (varName, obj) => varName + '=JSON.parse('
-        + JSON.stringify(JSON.stringify(obj)) + ');\n';
+    const asScript = (varName, obj) =>
+        varName + '=JSON.parse(' + JSON.stringify(JSON.stringify(obj)) + ');\n';
 
     const dictPath = path.join(OUT_DIR, 'dict.js');
     const lemmaPath = path.join(OUT_DIR, 'lemma.js');
     fs.writeFileSync(dictPath, banner('英漢詞典') + asScript('window.__EN_DICT__', dict));
-    fs.writeFileSync(lemmaPath, banner('不規則詞形還原表') + asScript('window.__EN_LEMMA__', lemma));
+    fs.writeFileSync(
+        lemmaPath,
+        banner('不規則詞形還原表') + asScript('window.__EN_LEMMA__', lemma),
+    );
 
     const kb = (p) => (fs.statSync(p).size / 1024).toFixed(0) + ' KB';
     console.log(`\n✅ 完成`);

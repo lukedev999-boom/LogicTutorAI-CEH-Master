@@ -3,14 +3,24 @@
   "version": "1.0.0",
   "description": "純靜態測驗作答系統",
   "private": true,
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build:css": "tailwindcss -c tailwind.config.js -i assets/css/tailwind-src.css -o assets/vendor/tailwind.css --minify",
     "build:html": "node build.js",
-    "build": "npm run build:css && npm run build:html",
+    "build": "node tools/vendor.js && npm run build:css && npm run build:html && node tools/package-site.js",
+    "test": "node --test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run format:check && npm test",
     "build:dict": "node tools/build-dict.js"
   },
   "devDependencies": {
+    "dompurify": "3.4.15",
     "opencc-js": "^1.4.2",
+    "prettier": "3.9.6",
     "tailwindcss": "^3.4.17"
   }
 }

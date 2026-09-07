@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.cache/
+index.html
+assets/vendor/
+assets/data/dict.js
+assets/data/lemma.js

@@ -2,7 +2,7 @@
 
 # 建置期依賴（執行期不需要）
 node_modules/
-package-lock.json
+SourceCode/dist/
 
 # 系統檔案
 .DS_Store

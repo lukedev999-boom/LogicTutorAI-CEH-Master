@@ -7,3 +7,4 @@
 # 若要分子目錄，寫成 ../images/2024/q1.png，images/ 之後的結構會被保留。
 *
 !.gitignore
+!example.svg

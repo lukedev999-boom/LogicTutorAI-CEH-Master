@@ -15,27 +15,26 @@
     if (typeof module === 'object' && module.exports) module.exports = api;
     else root.lemmaCandidates = api.lemmaCandidates;
 })(typeof self !== 'undefined' ? self : this, function () {
-
     // 後綴 → 可能的原形詞尾。順序即嘗試順序，先長後短避免 -es 被 -s 搶走。
     const SUFFIX_RULES = [
-        ['ies',  ['y']],
-        ['ied',  ['y']],
-        ['ier',  ['y']],
+        ['ies', ['y']],
+        ['ied', ['y']],
+        ['ier', ['y']],
         ['iest', ['y']],
-        ['ily',  ['y']],
+        ['ily', ['y']],
         ['sses', ['ss']],
         ['ches', ['ch']],
         ['shes', ['sh']],
-        ['xes',  ['x']],
-        ['zes',  ['z']],
-        ['ves',  ['f', 'fe']],
-        ['ing',  ['', 'e']],
-        ['est',  ['', 'e']],
-        ['ed',   ['', 'e']],
-        ['er',   ['', 'e']],
-        ['ly',   ['']],
-        ['es',   ['', 'e']],
-        ['s',    ['']],
+        ['xes', ['x']],
+        ['zes', ['z']],
+        ['ves', ['f', 'fe']],
+        ['ing', ['', 'e']],
+        ['est', ['', 'e']],
+        ['ed', ['', 'e']],
+        ['er', ['', 'e']],
+        ['ly', ['']],
+        ['es', ['', 'e']],
+        ['s', ['']],
     ];
 
     /**

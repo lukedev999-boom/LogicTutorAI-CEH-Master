@@ -1,45 +1,55 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#0f172a">
-    <title>測驗作答系統</title>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="theme-color" content="#0f172a" />
+        <meta
+            name="description"
+            content="LogicTutorAI：以 Markdown 題庫驅動的輕量靜態練習工具，支援單選、多選、簡答與離線查字。"
+        />
+        <title>LogicTutorAI · Markdown 題庫練習</title>
 
-    <!--
+        <!--
         純靜態資源：全部改為本地載入，無任何外部網路依賴。
         可離線使用，亦可直接以 file:// 開啟。
         Tailwind CSS 由 `npm run build:css` 預先編譯產生。
     -->
-    <link rel="stylesheet" href="assets/vendor/tailwind.css">
-    <link rel="stylesheet" href="assets/css/fonts.css">
-    <link rel="stylesheet" href="assets/css/main.css">
-    <link rel="stylesheet" href="assets/css/responsive.css">
+        <link rel="stylesheet" href="assets/vendor/tailwind.css" />
+        <link rel="stylesheet" href="assets/css/fonts.css" />
+        <link rel="stylesheet" href="assets/css/main.css" />
+        <link rel="stylesheet" href="assets/css/responsive.css" />
 
-    <script src="assets/vendor/marked.min.js" defer></script>
-</head>
-<body class="text-gray-100">
-    <!-- 主容器 -->
-    <div id="app" class="min-h-screen flex flex-col">
-    </div>
+        <script src="assets/vendor/marked.min.js" defer></script>
+        <script src="assets/vendor/purify.min.js" defer></script>
+    </head>
+    <body class="text-gray-100">
+        <!-- 主容器 -->
+        <div id="app" class="min-h-screen flex flex-col"></div>
 
-    <!-- Toast 提示容器（非阻塞式訊息） -->
-    <div id="toastContainer" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center gap-2 pointer-events-none"
-         role="status" aria-live="polite"></div>
+        <!-- Toast 提示容器（非阻塞式訊息） -->
+        <div
+            id="toastContainer"
+            class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center gap-2 pointer-events-none"
+            role="status"
+            aria-live="polite"
+        ></div>
 
-    <!--
+        <!--
         英文單字即點即譯：詞典資料以 <script> 而非 fetch 載入，
         因為本專案支援 file:// 直接開啟，該情境下 fetch 本地 JSON 會被同源政策擋掉。
         defer 保證依序執行，且不阻塞頁面解析。
     -->
-    <script src="assets/js/lemma-rules.js" defer></script>
-    <script src="assets/data/glossary.js" defer></script>
-    <script src="assets/data/dict.js" defer></script>
-    <script src="assets/data/lemma.js" defer></script>
-    <script src="assets/js/wordlookup.js" defer></script>
+        <script src="assets/js/lemma-rules.js" defer></script>
+        <script src="assets/data/glossary.js" defer></script>
+        <script src="assets/data/dict.js" defer></script>
+        <script src="assets/data/lemma.js" defer></script>
+        <script src="assets/js/wordlookup.js" defer></script>
 
-    <script src="assets/js/main.js" defer></script>
-</body>
+        <script src="assets/js/question-bank.js" defer></script>
+        <script src="assets/js/storage.js" defer></script>
+        <script src="assets/js/main.js" defer></script>
+    </body>
 </html>

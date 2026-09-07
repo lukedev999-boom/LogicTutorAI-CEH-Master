@@ -34,8 +34,13 @@ body {
 
 /* 正確答案閃爍 */
 @keyframes correctPulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
-    50% { box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); }
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 0 8px rgba(34, 197, 94, 0);
+    }
 }
 .correct-answer {
     animation: correctPulse 0.6s ease;
@@ -43,7 +48,9 @@ body {
 
 /* 載入動畫 */
 @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
 .loading-spinner {
     animation: spin 1s linear infinite;
@@ -55,17 +62,39 @@ body {
 
 /* 計時器震動動畫 */
 @keyframes timerShake {
-    0% { transform: translateX(0); }
-    10% { transform: translateX(-8px); }
-    20% { transform: translateX(8px); }
-    30% { transform: translateX(-8px); }
-    40% { transform: translateX(8px); }
-    50% { transform: translateX(-8px); }
-    60% { transform: translateX(8px); }
-    70% { transform: translateX(-8px); }
-    80% { transform: translateX(8px); }
-    90% { transform: translateX(-8px); }
-    100% { transform: translateX(0); }
+    0% {
+        transform: translateX(0);
+    }
+    10% {
+        transform: translateX(-8px);
+    }
+    20% {
+        transform: translateX(8px);
+    }
+    30% {
+        transform: translateX(-8px);
+    }
+    40% {
+        transform: translateX(8px);
+    }
+    50% {
+        transform: translateX(-8px);
+    }
+    60% {
+        transform: translateX(8px);
+    }
+    70% {
+        transform: translateX(-8px);
+    }
+    80% {
+        transform: translateX(8px);
+    }
+    90% {
+        transform: translateX(-8px);
+    }
+    100% {
+        transform: translateX(0);
+    }
 }
 
 .timer-shake {
@@ -74,7 +103,8 @@ body {
 
 /* 計時器紅色警告脈衝 */
 @keyframes timerWarningPulse {
-    0%, 100% {
+    0%,
+    100% {
         background: linear-gradient(to right, rgba(217, 119, 6, 0.3), rgba(239, 68, 68, 0.3));
         border-color: rgba(217, 119, 6, 0.5);
     }
@@ -155,7 +185,9 @@ body {
     min-width: 320px;
     max-width: 480px;
     max-height: 80vh;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(251, 191, 36, 0.2);
+    box-shadow:
+        0 25px 50px -12px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(251, 191, 36, 0.2);
     border-radius: 16px;
     overflow: hidden;
     resize: both;
@@ -208,12 +240,20 @@ body {
     margin-bottom: 0.5rem;
     line-height: 1.4;
 }
-.explanation-content h1 { font-size: 1.5rem; }
-.explanation-content h2 { font-size: 1.25rem; }
-.explanation-content h3 { font-size: 1.125rem; }
+.explanation-content h1 {
+    font-size: 1.5rem;
+}
+.explanation-content h2 {
+    font-size: 1.25rem;
+}
+.explanation-content h3 {
+    font-size: 1.125rem;
+}
 .explanation-content h4,
 .explanation-content h5,
-.explanation-content h6 { font-size: 1rem; }
+.explanation-content h6 {
+    font-size: 1rem;
+}
 
 .explanation-content p {
     margin-bottom: 0.875rem;
@@ -339,12 +379,20 @@ body {
     margin-bottom: 0.5rem;
     line-height: 1.4;
 }
-#shortAnswerContent h1 { font-size: 1.5rem; }
-#shortAnswerContent h2 { font-size: 1.25rem; }
-#shortAnswerContent h3 { font-size: 1.125rem; }
+#shortAnswerContent h1 {
+    font-size: 1.5rem;
+}
+#shortAnswerContent h2 {
+    font-size: 1.25rem;
+}
+#shortAnswerContent h3 {
+    font-size: 1.125rem;
+}
 #shortAnswerContent h4,
 #shortAnswerContent h5,
-#shortAnswerContent h6 { font-size: 1rem; }
+#shortAnswerContent h6 {
+    font-size: 1rem;
+}
 
 #shortAnswerContent p {
     margin-bottom: 0.875rem;
@@ -487,7 +535,9 @@ body {
     text-underline-offset: 4px;
     cursor: pointer;
     border-radius: 3px;
-    transition: background-color 0.15s ease, text-decoration-color 0.15s ease;
+    transition:
+        background-color 0.15s ease,
+        text-decoration-color 0.15s ease;
 }
 .wordlookup-term:hover {
     background-color: rgba(59, 130, 246, 0.16);
@@ -518,7 +568,10 @@ body {
     opacity: 0;
     visibility: hidden;
     transform: translateY(-4px);
-    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+    transition:
+        opacity 0.15s ease,
+        transform 0.15s ease,
+        visibility 0.15s;
     pointer-events: auto;
 }
 .wordlookup-tip.is-visible {

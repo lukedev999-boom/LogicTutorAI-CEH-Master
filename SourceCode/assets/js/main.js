@@ -1,22 +1,13 @@
-/**
- * LogicTutorAI - 測驗作答系統
- * 完整 JavaScript 邏輯
- *
- * 注意：此文件包含所有 JavaScript 邏輯。
- * 後續可按以下方式進一步拆分：
- * - ui.js: 所有 UI 更新和 DOM 操作（renderQuestion, updateStats 等）
- * - handlers.js: 所有事件處理器（selectSingleOption, submitMultipleChoice 等）
- * - main.js: 全域狀態和核心邏輯（保留）
- */
+/** LogicTutorAI：作答狀態、介面與事件協調。 */
 
 // ==================== 全域狀態 ====================
-let questions = [];           // 所有題目
-let currentIndex = 0;         // 當前題目索引
-let showChinese = false;      // 是否顯示中文
-let answerState = {};         // 答題狀態 { questionNum: 'correct' | 'wrong' }
-let userAnswers = {};         // 使用者實際作答 { questionNum: 'A' | 'AC' }
-let selectedOptions = [];     // 多選題已選選項
-let hasAnswered = false;      // 當前題目是否已作答
+let questions = []; // 所有題目
+let currentIndex = 0; // 當前題目索引
+let showChinese = false; // 是否顯示中文
+let answerState = {}; // 答題狀態 { questionNum: 'correct' | 'wrong' }
+let userAnswers = {}; // 使用者實際作答 { questionNum: 'A' | 'AC' }
+let selectedOptions = []; // 多選題已選選項
+let hasAnswered = false; // 當前題目是否已作答
 let randomJumpEnabled = false; // 隨機跳題功能
 let keywordHighlightEnabled = true; // 關鍵字高亮功能（預設啟用）
 
@@ -24,74 +15,33 @@ let keywordHighlightEnabled = true; // 關鍵字高亮功能（預設啟用）
 let bankId = 'default';
 
 // 閱讀範圍設定
-let rangeEnabled = false;     // 是否啟用範圍限制
-let rangeStart = 1;           // 起始題號
-let rangeEnd = null;          // 結束題號（null 表示到最後一題）
+let rangeEnabled = false; // 是否啟用範圍限制
+let rangeStart = 1; // 起始題號
+let rangeEnd = null; // 結束題號（null 表示到最後一題）
 let showImportantOnly = false; // 是否僅顯示重要題目
-let wrongOnlyEnabled = false;  // 僅複習答錯的題目
+let wrongOnlyEnabled = false; // 僅複習答錯的題目
 
 // 題型過濾設定
 let enabledQuestionTypes = ['單選題', '多選題', '簡答題'];
 
 // 搜尋狀態
-let searchKeyword = '';       // 目前的搜尋關鍵字（空字串表示未搜尋）
+let searchKeyword = ''; // 目前的搜尋關鍵字（空字串表示未搜尋）
 
 // GROQ AI 設定
-let groqApiKey = '';          // GROQ API Key
-let groqModel = 'openai/gpt-oss-20b';  // 預設模型
-let availableModels = [];     // 可用模型列表
+let groqApiKey = ''; // GROQ API Key
+let groqModel = 'openai/gpt-oss-20b'; // 預設模型
+let availableModels = []; // 可用模型列表
 
 // ==================== 倒數計時器設定 ====================
-let timerEnabled = true;       // 是否啟用計時器（預設啟用）
-let timerDuration = 60;        // 計時器時間（秒，預設 60 秒）
-let timeRemaining = 0;         // 剩餘時間
-let timerInterval = null;      // 計時器 interval 參考
-let timerStartTime = 0;        // 計時器總時長（秒）
-let timerDeadline = 0;         // 計時器到期時間戳（毫秒）
-let timerQuestionNum = null;   // 計時器所屬題號，用於判斷是否需要重新計時
+let timerEnabled = true; // 是否啟用計時器（預設啟用）
+let timerDuration = 60; // 計時器時間（秒，預設 60 秒）
+let timeRemaining = 0; // 剩餘時間
+let timerInterval = null; // 計時器 interval 參考
+let timerStartTime = 0; // 計時器總時長（秒）
+let timerDeadline = 0; // 計時器到期時間戳（毫秒）
+let timerQuestionNum = null; // 計時器所屬題號，用於判斷是否需要重新計時
 
 // ==================== 圖片路徑處理 ====================
-
-/** 題目圖片的存放目錄，相對於 index.html */
-const IMAGE_BASE_DIR = 'images/';
-
-/**
- * 正規化題庫中的圖片路徑
- *
- * 題庫的圖片多半寫成 `../images/q44_1.png`，那是相對於「題庫 md 檔自身位置」
- * 的寫法。但瀏覽器解析 <img src> 時的基準是「目前頁面的 URL」而非 md 檔，
- * 兩者不一致，圖片就會 404。
- *
- * 而且用「載入題庫」按鈕選檔時，瀏覽器基於安全考量不會提供 md 檔的磁碟路徑，
- * 任何相對於 md 的路徑在瀏覽器裡根本無從還原 —— 圖片只能放在網站目錄底下。
- *
- * 因此一律改寫為指向 index.html 同層的 images/：
- *   ../images/q44_1.png  →  images/q44_1.png
- *   ./images/2024/q1.png →  images/2024/q1.png   （保留 images/ 之後的子目錄）
- *   q44_1.png            →  images/q44_1.png
- * 外部網址與 data URI 則照原樣使用。
- *
- * @param {string} rawPath - 題庫 md 中寫的原始路徑
- * @returns {string} 可直接放進 <img src> 的路徑
- */
-function normalizeImagePath(rawPath) {
-    const path = String(rawPath || '').trim();
-    if (!path) return '';
-
-    // 外部資源照原樣使用（此時已不是離線資源，由使用者自行負責）
-    if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(path)) return path;
-
-    // 剝掉查詢字串與 hash，再統一分隔符號
-    const cleaned = path.split(/[?#]/)[0].replace(/\\/g, '/');
-
-    // 路徑中若含 images/ 這一段，保留其後的完整結構（子目錄不會被壓平）
-    const scoped = cleaned.match(/(?:^|\/)images\/(.+)$/i);
-    if (scoped) return IMAGE_BASE_DIR + scoped[1];
-
-    // 否則只取檔名
-    const fileName = cleaned.split('/').pop();
-    return fileName ? IMAGE_BASE_DIR + fileName : '';
-}
 
 /**
  * 圖片載不到時，就地換成說明用的提示框。
@@ -101,137 +51,20 @@ function normalizeImagePath(rawPath) {
 function handleImageError(img) {
     const src = img.getAttribute('src') || '';
     const placeholder = document.createElement('div');
-    placeholder.className = 'w-full max-w-lg p-4 rounded-lg border border-dashed border-slate-600 bg-slate-800/50 text-center';
+    placeholder.className =
+        'w-full max-w-lg p-4 rounded-lg border border-dashed border-slate-600 bg-slate-800/50 text-center';
     placeholder.innerHTML =
-        '<p class="text-slate-300 text-sm mb-1">🖼️ 圖片載入失敗</p>'
-        + '<p class="text-slate-500 text-xs break-all">找不到 <code>' + escapeHtml(src) + '</code></p>'
-        + '<p class="text-slate-500 text-xs mt-2">請將圖片檔放到 <code>' + IMAGE_BASE_DIR + '</code>（與 index.html 同層）</p>';
+        '<p class="text-slate-300 text-sm mb-1">🖼️ 圖片載入失敗</p>' +
+        '<p class="text-slate-500 text-xs break-all">找不到 <code>' +
+        escapeHtml(src) +
+        '</code></p>' +
+        '<p class="text-slate-500 text-xs mt-2">請將圖片檔放到 <code>' +
+        IMAGE_BASE_DIR +
+        '</code>（與 index.html 同層）</p>';
     img.replaceWith(placeholder);
 }
 
-// ==================== 題庫解析器 ====================
-/**
- * 解析 Markdown 題庫檔案
- * @param {string} markdown - Markdown 原始內容
- * @returns {Array} 題目陣列
- */
-function parseQuestions(markdown) {
-    const questions = [];
-
-    // 遮蔽 fenced code block，避免說明用的範例語法被誤判為真實題目欄位
-    const codeBlocks = [];
-    const masked = markdown.replace(/```[\s\S]*?```/g, match => {
-        codeBlocks.push(match);
-        return `\u0000CB${codeBlocks.length - 1}\u0000`;
-    });
-    const restore = text => (text == null ? text
-        : text.replace(/\u0000CB(\d+)\u0000/g, (_, i) => codeBlocks[i]));
-
-    // 以「獨立成行」的 --- 分隔各題（避免表格分隔列 |---|---| 被誤判為分隔線）
-    const blocks = masked.split(/^[ \t]*-{3,}[ \t]*$/m).filter(block => block.trim());
-
-    for (const block of blocks) {
-        // 解析題號與題型（支援 ## *第 XXX 題 格式，星號表示重要題目）
-        // 支援：單選題、多選題、簡答題
-        const headerMatch = block.match(/##\s*(\*)?\s*第\s*(\d+)\s*題\s*【(單選題|多選題|簡答題)】/);
-        if (!headerMatch) continue;
-
-        const isImportant = headerMatch[1] === '*';
-        const questionNum = parseInt(headerMatch[2]);
-        const questionType = headerMatch[3];
-        const isMultiple = questionType === '多選題';
-        const isShortAnswer = questionType === '簡答題';
-
-        // 解析英文題目
-        const englishMatch = block.match(/\*\*English:\*\*\s*([\s\S]*?)(?=\*\*中文：\*\*|\*\*圖片[：:]?\*\*|\!\[|\*\*選項：\*\*|\*\*參考答案[：:]?\*\*|$)/);
-        const englishText = restore(englishMatch ? englishMatch[1].trim() : '');
-
-        // 解析中文題目（簡答題可能後接 **圖片** 或 **參考答案**）
-        const chineseMatch = block.match(/\*\*中文：\*\*\s*([\s\S]*?)(?=(?:\*\*圖片[：:]?\*\*|\!\[|\*\*選項：\*\*|\*\*參考答案[：:]?\*\*|$))/);
-        const chineseText = restore(chineseMatch ? chineseMatch[1].trim() : '');
-
-        // 解析圖片（支援多張、任意 alt 文字；僅掃描「題目解析」之前的區段，
-        // 避免解析內容中的示意圖被誤收為題目附圖）
-        const imageScope = block.split(/\*\*題目解析[：:]?\*\*/)[0];
-        const imageMatches = [...imageScope.matchAll(/!\[[^\]]*\]\(([^)]*)\)/g)];
-        const imagePaths = imageMatches.map(m => normalizeImagePath(m[1])).filter(Boolean);
-
-        let options = [];
-        let correctAnswer = '';
-        let shortAnswer = null;
-
-        if (isShortAnswer) {
-            // 簡答題：解析參考答案區塊
-            const shortAnswerMatch = block.match(/\*\*參考答案[：:]?\*\*\s*([\s\S]*?)(?=(?:\*\*題目解析[：:]?\*\*|$))/);
-            shortAnswer = restore(shortAnswerMatch ? shortAnswerMatch[1].trim() : null);
-        } else {
-            // 選擇題：解析選項
-            const optionsMatch = block.match(/\*\*選項：\*\*\s*([\s\S]*?)(?=\*\*正確答案)/);
-            const optionsText = optionsMatch ? optionsMatch[1].trim() : '';
-            const optionLines = optionsText.split('\n').filter(line => line.trim().startsWith('-'));
-
-            options = optionLines.map(line => {
-                // 移除開頭的 "- " 並解析選項
-                const cleaned = line.replace(/^-\s*/, '').trim();
-                const letterMatch = cleaned.match(/^([A-F])\.\s*(.*)/);
-                if (letterMatch) {
-                    return {
-                        letter: letterMatch[1],
-                        text: letterMatch[2]
-                    };
-                }
-                return null;
-            }).filter(opt => opt !== null);
-
-            // 解析正確答案（支援連續格式 AB 或逗號分隔格式 A,B）
-            const answerMatch = block.match(/\*\*正確答案：([A-F,]+)\*\*/);
-            // 移除逗號，統一為連續字母格式（例如 A,B -> AB）
-            correctAnswer = answerMatch ? answerMatch[1].replace(/,/g, '') : '';
-        }
-
-        // 解析題目解析（可選欄位）
-        const explanationMatch = block.match(/\*\*題目解析[：:]?\*\*\s*([\s\S]*?)(?=$)/);
-        const explanation = restore(explanationMatch ? explanationMatch[1].trim() : null);
-
-        questions.push({
-            number: questionNum,
-            type: questionType,
-            isMultiple,
-            isShortAnswer,
-            isImportant,
-            englishText,
-            chineseText,
-            imagePaths,
-            options,
-            correctAnswer,
-            shortAnswer,
-            explanation
-        });
-    }
-
-    // 依題號排序
-    questions.sort((a, b) => a.number - b.number);
-    return questions;
-}
-
-/**
- * 計算題庫識別碼（以題數與題號序列產生短雜湊）
- *
- * 不同題庫使用各自獨立的 localStorage 命名空間，
- * 避免切換題庫時沿用到上一份題庫的作答紀錄而造成統計失真。
- * @param {Array} list - 題目陣列
- * @returns {string} 題庫識別碼
- */
-function computeBankId(list) {
-    if (!list.length) return 'default';
-    const signature = `${list.length}:${list[0].number}:${list[list.length - 1].number}:` +
-        list.slice(0, 20).map(q => `${q.number}${q.type}`).join('');
-    let hash = 5381;
-    for (let i = 0; i < signature.length; i++) {
-        hash = ((hash << 5) + hash + signature.charCodeAt(i)) >>> 0;
-    }
-    return hash.toString(36);
-}
+// 題庫解析與識別碼由 question-bank.js 提供。
 
 /**
  * 套用解析後的題庫並完成初始化
@@ -247,7 +80,7 @@ function applyQuestions(parsed) {
     // 多檔合併時可能出現重複題號，重複的題目會導致答題卡同號多格且狀態連動
     const seen = new Set();
     const duplicates = [];
-    questions = parsed.filter(q => {
+    questions = parsed.filter((q) => {
         if (seen.has(q.number)) {
             duplicates.push(q.number);
             return false;
@@ -261,7 +94,10 @@ function applyQuestions(parsed) {
     initQuiz();
 
     if (duplicates.length > 0) {
-        showToast(`已略過 ${duplicates.length} 題重複題號（第 ${duplicates.slice(0, 3).join('、')} 題等）`, 'warn');
+        showToast(
+            `已略過 ${duplicates.length} 題重複題號（第 ${duplicates.slice(0, 3).join('、')} 題等）`,
+            'warn',
+        );
     }
     return true;
 }
@@ -313,9 +149,7 @@ async function loadFileFromInput(event) {
         };
 
         // 並行讀取所有檔案
-        const contents = await Promise.all(
-            Array.from(files).map(file => readFile(file))
-        );
+        const contents = await Promise.all(Array.from(files).map((file) => readFile(file)));
 
         // 合併所有 MD 內容（用 --- 分隔符連接）
         const mergedMarkdown = contents.join('\n\n---\n\n');
@@ -328,7 +162,7 @@ async function loadFileFromInput(event) {
         }
     } catch (error) {
         console.error('載入檔案時發生錯誤:', error);
-        showToast('載入檔案時發生錯誤，請重試', 'error');
+        showToast(error.message || '載入檔案時發生錯誤，請重試', 'error');
         showEmptyState();
     }
 
@@ -421,7 +255,8 @@ function generateAnswerCard() {
         const question = questions[i];
         const div = document.createElement('button');
         div.type = 'button';
-        div.className = 'answer-card-item w-8 h-8 flex items-center justify-center text-xs font-medium rounded transition-colors';
+        div.className =
+            'answer-card-item w-8 h-8 flex items-center justify-center text-xs font-medium rounded transition-colors';
         div.textContent = question.number;
         div.dataset.index = i;
         div.dataset.num = question.number;
@@ -466,9 +301,19 @@ function updateCardItemColor(element, question, inRange = true) {
     const state = answerState[question.number];
 
     element.classList.remove(
-        'bg-green-500', 'bg-red-500', 'bg-slate-600', 'bg-slate-700', 'text-white',
-        'text-slate-400', 'text-slate-300', 'text-emerald-400',
-        'border', 'border-emerald-500', 'opacity-30', 'cursor-pointer', 'cursor-not-allowed'
+        'bg-green-500',
+        'bg-red-500',
+        'bg-slate-600',
+        'bg-slate-700',
+        'text-white',
+        'text-slate-400',
+        'text-slate-300',
+        'text-emerald-400',
+        'border',
+        'border-emerald-500',
+        'opacity-30',
+        'cursor-pointer',
+        'cursor-not-allowed',
     );
 
     if (question.isShortAnswer) {
@@ -508,7 +353,7 @@ function refreshAnswerCardAvailability() {
     if (questions.length === 0) return;
 
     const validIndices = new Set(getValidIndices());
-    document.querySelectorAll('#answerCard .answer-card-item').forEach(item => {
+    document.querySelectorAll('#answerCard .answer-card-item').forEach((item) => {
         const index = parseInt(item.dataset.index, 10);
         updateCardItemColor(item, questions[index], validIndices.has(index));
     });
@@ -561,7 +406,8 @@ function renderQuestion(opts = {}) {
     }
 
     // 更新題號
-    document.getElementById('questionNumber').textContent = `第 ${q.number} 題 / ${questions.length} 題`;
+    document.getElementById('questionNumber').textContent =
+        `第 ${q.number} 題 / ${questions.length} 題`;
 
     // 更新題型
     const typeEl = document.getElementById('questionType');
@@ -573,7 +419,8 @@ function renderQuestion(opts = {}) {
     } else if (q.isMultiple) {
         typeClass = 'bg-purple-600/20 text-purple-400';
     }
-    typeEl.className = 'px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs sm:text-sm font-medium ' + typeClass;
+    typeEl.className =
+        'px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs sm:text-sm font-medium ' + typeClass;
 
     // 顯示/隱藏查看圖片按鈕（附圖片題才顯示）
     const viewImageBtn = document.getElementById('viewImageBtn');
@@ -582,17 +429,22 @@ function renderQuestion(opts = {}) {
         viewImageBtn.classList.add('flex');
         // 更新按鈕文字顯示圖片數量
         const btnText = viewImageBtn.querySelector('span');
-        btnText.textContent = q.imagePaths.length > 1 ? `查看圖片 (${q.imagePaths.length})` : '查看圖片';
+        btnText.textContent =
+            q.imagePaths.length > 1 ? `查看圖片 (${q.imagePaths.length})` : '查看圖片';
         // 生成 Dialog 圖片內容
         const imageWrapper = document.getElementById('imageWrapper');
-        imageWrapper.innerHTML = q.imagePaths.map((path, index) => `
+        imageWrapper.innerHTML = q.imagePaths
+            .map(
+                (path, index) => `
             <div class="w-full flex flex-col items-center">
                 ${q.imagePaths.length > 1 ? `<p class="text-sm text-slate-400 mb-2">圖片 ${index + 1} / ${q.imagePaths.length}</p>` : ''}
                 <img src="${escapeHtml(path)}" alt="題目圖片 ${index + 1}"
                      class="max-w-full object-contain select-none shadow-2xl rounded border border-slate-700"
                      draggable="false" onerror="handleImageError(this)">
             </div>
-        `).join('');
+        `,
+            )
+            .join('');
     } else {
         viewImageBtn.classList.add('hidden');
         viewImageBtn.classList.remove('flex');
@@ -602,7 +454,9 @@ function renderQuestion(opts = {}) {
     const imageContainer = document.getElementById('questionImage');
     if (q.imagePaths && q.imagePaths.length > 0) {
         imageContainer.classList.remove('hidden');
-        imageContainer.innerHTML = q.imagePaths.map((path, index) => `
+        imageContainer.innerHTML = q.imagePaths
+            .map(
+                (path, index) => `
             <div class="flex flex-col items-center">
                 ${q.imagePaths.length > 1 ? `<p class="text-sm text-slate-400 mb-2">圖片 ${index + 1} / ${q.imagePaths.length}</p>` : ''}
                 <img src="${escapeHtml(path)}" alt="題目圖片 ${index + 1}" loading="lazy"
@@ -610,7 +464,9 @@ function renderQuestion(opts = {}) {
                      onclick="openImageDialog()" onerror="handleImageError(this)"
                      title="點擊放大查看">
             </div>
-        `).join('');
+        `,
+            )
+            .join('');
     } else {
         imageContainer.classList.add('hidden');
         imageContainer.innerHTML = '';
@@ -637,7 +493,9 @@ function renderQuestion(opts = {}) {
     }
 
     // 更新翻譯按鈕狀態
-    document.getElementById('translateBtnText').textContent = showChinese ? '顯示英文原文' : '顯示中文翻譯';
+    document.getElementById('translateBtnText').textContent = showChinese
+        ? '顯示英文原文'
+        : '顯示中文翻譯';
 
     // 渲染選項（簡答題則渲染查看答案按鈕）
     renderOptions(q);
@@ -691,6 +549,7 @@ function renderQuestion(opts = {}) {
     if (hasAnswered) {
         showAnswerResult(q, answerState[q.number] === 'correct');
     }
+    storage.setItem(progressKey('currentIndex'), currentIndex.toString());
 }
 
 /**
@@ -708,12 +567,13 @@ function renderOptions(question) {
     const correctLetters = question.correctAnswer.split('');
     const chosenLetters = (userAnswers[question.number] || '').split('').filter(Boolean);
 
-    question.options.forEach(opt => {
+    question.options.forEach((opt) => {
         const isCorrect = correctLetters.includes(opt.letter);
         const isChosen = chosenLetters.includes(opt.letter);
 
         const div = document.createElement('div');
-        div.className = 'option-btn flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all';
+        div.className =
+            'option-btn flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all';
         div.dataset.letter = opt.letter;
 
         // 根據已作答狀態設定樣式
@@ -743,7 +603,7 @@ function renderOptions(question) {
                 if (e.target.checked) {
                     selectedOptions.push(opt.letter);
                 } else {
-                    selectedOptions = selectedOptions.filter(l => l !== opt.letter);
+                    selectedOptions = selectedOptions.filter((l) => l !== opt.letter);
                 }
             };
             div.appendChild(checkbox);
@@ -758,7 +618,8 @@ function renderOptions(question) {
         } else {
             // 單選題使用圓形指示器
             const indicator = document.createElement('div');
-            indicator.className = 'w-8 h-8 rounded-full border-2 flex items-center justify-center font-bold text-sm shrink-0';
+            indicator.className =
+                'w-8 h-8 rounded-full border-2 flex items-center justify-center font-bold text-sm shrink-0';
             if (hasAnswered && isCorrect) {
                 indicator.classList.add('border-green-500', 'bg-green-500', 'text-white');
             } else if (hasAnswered && isChosen) {
@@ -782,7 +643,9 @@ function renderOptions(question) {
         if (showChinese) {
             // 嘗試提取中文部分（括號內）
             const chineseMatch = opt.text.match(/（(.+?)）/);
-            const displayText = chineseMatch ? `${opt.letter}. ${chineseMatch[1]}` : `${opt.letter}. ${opt.text}`;
+            const displayText = chineseMatch
+                ? `${opt.letter}. ${chineseMatch[1]}`
+                : `${opt.letter}. ${opt.text}`;
             textSpan.innerHTML = highlightKeywords(displayText);
         } else {
             // 只顯示英文部分
@@ -822,7 +685,9 @@ function selectSingleOption(letter, question) {
     if (isCorrect) {
         // 隨機跳題模式：檢查是否還有可跳題目
         // 一般模式：檢查是否還有下一題
-        const canJump = randomJumpEnabled ? getRandomNextIndex() !== -1 : currentIndex < questions.length - 1;
+        const canJump = randomJumpEnabled
+            ? getRandomNextIndex() !== -1
+            : currentIndex < questions.length - 1;
         if (canJump) {
             setTimeout(() => {
                 nextQuestion();
@@ -865,7 +730,9 @@ function submitMultipleChoice() {
     if (isCorrect) {
         // 隨機跳題模式：檢查是否還有可跳題目
         // 一般模式：檢查是否還有下一題
-        const canJump = randomJumpEnabled ? getRandomNextIndex() !== -1 : currentIndex < questions.length - 1;
+        const canJump = randomJumpEnabled
+            ? getRandomNextIndex() !== -1
+            : currentIndex < questions.length - 1;
         if (canJump) {
             setTimeout(() => {
                 nextQuestion();
@@ -894,10 +761,10 @@ function showShortAnswer() {
         // 使用 marked.js 渲染 Markdown 內容（支援表格等格式）
         if (q.shortAnswer) {
             if (typeof marked !== 'undefined') {
-                shortAnswerContent.innerHTML = marked.parse(q.shortAnswer);
+                shortAnswerContent.innerHTML = renderMarkdown(q.shortAnswer);
             } else {
                 // 如果 marked.js 未載入，直接顯示原始內容
-                shortAnswerContent.innerHTML = `<pre class="whitespace-pre-wrap">${q.shortAnswer}</pre>`;
+                shortAnswerContent.innerHTML = `<pre class="whitespace-pre-wrap">${escapeHtml(q.shortAnswer)}</pre>`;
             }
         } else {
             shortAnswerContent.innerHTML = '<p class="text-slate-400">此題無參考答案</p>';
@@ -965,14 +832,14 @@ function getValidRange() {
             startIdx: 0,
             endIdx: questions.length - 1,
             startNum: questions[0]?.number || 1,
-            endNum: questions[questions.length - 1]?.number || 1
+            endNum: questions[questions.length - 1]?.number || 1,
         };
     }
 
     // 找到範圍內的起始和結束索引
     const effectiveEnd = rangeEnd || questions[questions.length - 1].number;
-    let startIdx = questions.findIndex(q => q.number >= rangeStart);
-    let endIdx = questions.findIndex(q => q.number > effectiveEnd);
+    let startIdx = questions.findIndex((q) => q.number >= rangeStart);
+    let endIdx = questions.findIndex((q) => q.number > effectiveEnd);
 
     if (startIdx === -1) startIdx = 0;
     if (endIdx === -1) endIdx = questions.length;
@@ -988,7 +855,7 @@ function getValidRange() {
         startIdx,
         endIdx,
         startNum: questions[startIdx]?.number || 1,
-        endNum: questions[endIdx]?.number || 1
+        endNum: questions[endIdx]?.number || 1,
     };
 }
 
@@ -1042,8 +909,11 @@ function matchesKeyword(question, keyword) {
         question.englishText,
         question.chineseText,
         question.shortAnswer,
-        ...question.options.map(opt => opt.text)
-    ].filter(Boolean).join('\n').toLowerCase();
+        ...question.options.map((opt) => opt.text),
+    ]
+        .filter(Boolean)
+        .join('\n')
+        .toLowerCase();
 
     return haystack.includes(keyword);
 }
@@ -1134,7 +1004,7 @@ function jumpToQuestion() {
     }
 
     // 尋找對應題號的索引
-    const index = questions.findIndex(q => q.number === num);
+    const index = questions.findIndex((q) => q.number === num);
     if (index === -1) {
         showToast(`找不到第 ${num} 題`, 'error');
         return;
@@ -1204,7 +1074,7 @@ function updateStats() {
     document.getElementById('accuracy').textContent = accuracy + '%';
 
     // 計算可作答題數（不含簡答題）
-    const answerableQuestions = questions.filter(q => !q.isShortAnswer).length;
+    const answerableQuestions = questions.filter((q) => !q.isShortAnswer).length;
     const shortAnswerCount = questions.length - answerableQuestions;
 
     // 更新進度條（簡答題不計入）
@@ -1233,9 +1103,9 @@ function progressKey(key) {
 
 function saveProgress() {
     try {
-        localStorage.setItem(progressKey('answerState'), JSON.stringify(answerState));
-        localStorage.setItem(progressKey('userAnswers'), JSON.stringify(userAnswers));
-        localStorage.setItem(progressKey('currentIndex'), currentIndex.toString());
+        storage.setItem(progressKey('answerState'), JSON.stringify(answerState));
+        storage.setItem(progressKey('userAnswers'), JSON.stringify(userAnswers));
+        storage.setItem(progressKey('currentIndex'), currentIndex.toString());
     } catch (e) {
         console.warn('儲存進度失敗（可能已達儲存空間上限）', e);
     }
@@ -1247,17 +1117,18 @@ function loadSavedProgress() {
     currentIndex = 0;
 
     try {
-        const saved = localStorage.getItem(progressKey('answerState'));
+        const saved = storage.getItem(progressKey('answerState'));
         if (saved) answerState = JSON.parse(saved) || {};
 
-        const savedAnswers = localStorage.getItem(progressKey('userAnswers'));
+        const savedAnswers = storage.getItem(progressKey('userAnswers'));
         if (savedAnswers) userAnswers = JSON.parse(savedAnswers) || {};
 
-        const savedIndex = localStorage.getItem(progressKey('currentIndex'));
+        const savedIndex = storage.getItem(progressKey('currentIndex'));
         if (savedIndex !== null) {
             const parsed = parseInt(savedIndex, 10);
             // 確保索引在有效範圍內
-            currentIndex = (Number.isNaN(parsed) || parsed >= questions.length || parsed < 0) ? 0 : parsed;
+            currentIndex =
+                Number.isNaN(parsed) || parsed >= questions.length || parsed < 0 ? 0 : parsed;
         }
     } catch (e) {
         console.warn('載入進度失敗，改以全新進度開始', e);
@@ -1274,9 +1145,9 @@ function resetProgress() {
     userAnswers = {};
     currentIndex = 0;
     stopTimer();
-    localStorage.removeItem(progressKey('answerState'));
-    localStorage.removeItem(progressKey('userAnswers'));
-    localStorage.removeItem(progressKey('currentIndex'));
+    storage.removeItem(progressKey('answerState'));
+    storage.removeItem(progressKey('userAnswers'));
+    storage.removeItem(progressKey('currentIndex'));
     generateAnswerCard();
     renderQuestion();
     updateStats();
@@ -1404,7 +1275,8 @@ function handleTimerExpired() {
     // 顯示超時提示（可選）
     const resultMessage = document.getElementById('resultMessage');
     if (resultMessage && !hasAnswered) {
-        resultMessage.className = 'block mt-6 p-4 rounded-xl bg-red-500/10 text-red-400 border border-red-500/50';
+        resultMessage.className =
+            'block mt-6 p-4 rounded-xl bg-red-500/10 text-red-400 border border-red-500/50';
         resultMessage.innerHTML = '<strong>⏰ 時間已到！</strong><br>未在規定時間內作答';
         resultMessage.classList.remove('hidden');
     }
@@ -1414,6 +1286,10 @@ function handleTimerExpired() {
 /**
  * HTML 轉義
  */
+function renderMarkdown(text) {
+    return DOMPurify.sanitize(marked.parse(text), { USE_PROFILES: { html: true } });
+}
+
 function escapeHtml(text) {
     return String(text ?? '')
         .replace(/&/g, '&amp;')
@@ -1441,11 +1317,12 @@ function showToast(message, type = 'info') {
         info: 'bg-slate-800 border-slate-600 text-slate-100',
         success: 'bg-green-600/90 border-green-400 text-white',
         warn: 'bg-amber-600/90 border-amber-400 text-white',
-        error: 'bg-red-600/90 border-red-400 text-white'
+        error: 'bg-red-600/90 border-red-400 text-white',
     };
 
     const toast = document.createElement('div');
-    toast.className = `pointer-events-auto px-4 py-2.5 rounded-lg border shadow-lg text-sm max-w-[90vw] ` +
+    toast.className =
+        `pointer-events-auto px-4 py-2.5 rounded-lg border shadow-lg text-sm max-w-[90vw] ` +
         `transition-opacity duration-300 ${styles[type] || styles.info}`;
     toast.textContent = message;
     container.appendChild(toast);
@@ -1591,7 +1468,7 @@ function openExplanationPanel() {
     const content = document.getElementById('explanationContent');
 
     // 渲染 Markdown 解析
-    content.innerHTML = marked.parse(q.explanation);
+    content.innerHTML = renderMarkdown(q.explanation);
     document.getElementById('explanationQuestionNum').textContent = `第 ${q.number} 題`;
 
     panel.classList.remove('hidden');
@@ -1741,14 +1618,14 @@ async function verifyApiKey() {
     try {
         // 測試 API Key
         const response = await fetch('https://api.groq.com/openai/v1/models', {
-            headers: { 'Authorization': `Bearer ${key}` }
+            headers: { Authorization: `Bearer ${key}` },
         });
 
         if (response.ok) {
             const data = await response.json();
-            availableModels = data.data.map(m => m.id);
+            availableModels = data.data.map((m) => m.id);
             groqApiKey = key;
-            localStorage.setItem('groq_api_key', key);
+            storage.setItem('groq_api_key', key);
 
             // 顯示模型選擇
             document.getElementById('modelSelectContainer').classList.remove('hidden');
@@ -1773,7 +1650,9 @@ async function verifyApiKey() {
 
 function populateModelDropdown() {
     renderModelOptions(
-        availableModels.filter(m => m.includes('mixtral') || m.includes('gpt') || m.includes('llama'))
+        availableModels.filter(
+            (m) => m.includes('mixtral') || m.includes('gpt') || m.includes('llama'),
+        ),
     );
 }
 
@@ -1789,7 +1668,10 @@ function renderModelOptions(models) {
     if (!dropdown) return;
 
     dropdown.innerHTML = models
-        .map(m => `<div class="px-4 py-2 hover:bg-slate-700 cursor-pointer text-sm" data-model="${escapeHtml(m)}">${escapeHtml(m)}</div>`)
+        .map(
+            (m) =>
+                `<div class="px-4 py-2 hover:bg-slate-700 cursor-pointer text-sm" data-model="${escapeHtml(m)}">${escapeHtml(m)}</div>`,
+        )
         .join('');
 
     if (!dropdown.dataset.bound) {
@@ -1815,7 +1697,7 @@ function showModelDropdown() {
 
 function filterModels() {
     const input = document.getElementById('modelSearchInput').value.toLowerCase();
-    renderModelOptions(availableModels.filter(m => m.toLowerCase().includes(input)));
+    renderModelOptions(availableModels.filter((m) => m.toLowerCase().includes(input)));
 }
 
 function toggleAdvancedSettings() {
@@ -1853,9 +1735,9 @@ function saveSettings() {
         customPrompt = '';
     }
 
-    localStorage.setItem('groq_api_key', groqApiKey);
-    localStorage.setItem('groq_model', groqModel);
-    localStorage.setItem('groq_custom_prompt', customPrompt);
+    storage.setItem('groq_api_key', groqApiKey);
+    storage.setItem('groq_model', groqModel);
+    storage.setItem('groq_custom_prompt', customPrompt);
 
     closeSettingsDialog();
 }
@@ -1931,7 +1813,7 @@ function toggleRangeEnabled() {
         container.classList.add('hidden');
     }
 
-    localStorage.setItem('range_enabled', rangeEnabled);
+    storage.setItem('range_enabled', rangeEnabled);
     updateJumpInputMax();
 
     // 如果僅顯示重要題目已啟用，更新其信息
@@ -1951,12 +1833,12 @@ function toggleRandomJump() {
         info.classList.add('hidden');
     }
 
-    localStorage.setItem('random_jump_enabled', randomJumpEnabled);
+    storage.setItem('random_jump_enabled', randomJumpEnabled);
 }
 
 function toggleKeywordHighlight() {
     keywordHighlightEnabled = document.getElementById('keywordHighlightCheckbox').checked;
-    localStorage.setItem('keyword_highlight_enabled', keywordHighlightEnabled);
+    storage.setItem('keyword_highlight_enabled', keywordHighlightEnabled);
 
     // 重新渲染題目以套用新的設定（不重置倒數計時）
     if (questions.length > 0) {
@@ -1973,7 +1855,7 @@ function toggleWrongOnly() {
 
     if (info) info.classList.toggle('hidden', !wrongOnlyEnabled);
 
-    localStorage.setItem('wrong_only_enabled', wrongOnlyEnabled);
+    storage.setItem('wrong_only_enabled', wrongOnlyEnabled);
     updateWrongOnlyInfo();
     applyFilterChange();
 }
@@ -1985,10 +1867,9 @@ function updateWrongOnlyInfo() {
     const infoText = document.getElementById('wrongOnlyInfoText');
     if (!infoText || questions.length === 0) return;
 
-    const wrongCount = questions.filter(q => answerState[q.number] === 'wrong').length;
-    infoText.textContent = wrongCount > 0
-        ? `目前共有 ${wrongCount} 題答錯的題目`
-        : '目前沒有答錯的題目';
+    const wrongCount = questions.filter((q) => answerState[q.number] === 'wrong').length;
+    infoText.textContent =
+        wrongCount > 0 ? `目前共有 ${wrongCount} 題答錯的題目` : '目前沒有答錯的題目';
 }
 
 /**
@@ -2028,9 +1909,10 @@ function updateSearchInfo() {
 
     infoText.classList.remove('hidden');
     const count = getValidIndices().length;
-    infoText.textContent = count > 0
-        ? `找到 ${count} 題符合「${searchKeyword.trim()}」`
-        : `沒有題目符合「${searchKeyword.trim()}」`;
+    infoText.textContent =
+        count > 0
+            ? `找到 ${count} 題符合「${searchKeyword.trim()}」`
+            : `沒有題目符合「${searchKeyword.trim()}」`;
 }
 
 /**
@@ -2074,7 +1956,7 @@ function toggleQuestionType(type) {
     }
 
     // 保存到 localStorage
-    localStorage.setItem('enabled_question_types', JSON.stringify(enabledQuestionTypes));
+    storage.setItem('enabled_question_types', JSON.stringify(enabledQuestionTypes));
 
     // 更新信息顯示
     updateQuestionTypeCheckboxes();
@@ -2100,8 +1982,10 @@ function updateQuestionTypeCheckboxes() {
     const multipleChoiceCheckbox = document.getElementById('multipleChoiceCheckbox');
     const shortAnswerCheckbox = document.getElementById('shortAnswerCheckbox');
 
-    if (singleChoiceCheckbox) singleChoiceCheckbox.checked = enabledQuestionTypes.includes('單選題');
-    if (multipleChoiceCheckbox) multipleChoiceCheckbox.checked = enabledQuestionTypes.includes('多選題');
+    if (singleChoiceCheckbox)
+        singleChoiceCheckbox.checked = enabledQuestionTypes.includes('單選題');
+    if (multipleChoiceCheckbox)
+        multipleChoiceCheckbox.checked = enabledQuestionTypes.includes('多選題');
     if (shortAnswerCheckbox) shortAnswerCheckbox.checked = enabledQuestionTypes.includes('簡答題');
 }
 
@@ -2117,7 +2001,7 @@ function toggleShowImportantOnly() {
         info.classList.add('hidden');
     }
 
-    localStorage.setItem('show_important_only', showImportantOnly);
+    storage.setItem('show_important_only', showImportantOnly);
     applyFilterChange();
 }
 
@@ -2146,8 +2030,8 @@ function updateRangeSettings() {
     rangeStart = parseInt(startInput.value) || 1;
     rangeEnd = endInput.value ? parseInt(endInput.value) : null;
 
-    localStorage.setItem('range_start', rangeStart);
-    localStorage.setItem('range_end', rangeEnd || '');
+    storage.setItem('range_start', rangeStart);
+    storage.setItem('range_end', rangeEnd || '');
 
     updateRangeInfo();
     updateJumpInputMax();
@@ -2171,9 +2055,9 @@ function resetRange() {
     rangeEnd = null;
     document.getElementById('rangeEnabledCheckbox').checked = false;
     document.getElementById('rangeInputContainer').classList.add('hidden');
-    localStorage.setItem('range_enabled', 'false');
-    localStorage.removeItem('range_start');
-    localStorage.removeItem('range_end');
+    storage.setItem('range_enabled', 'false');
+    storage.removeItem('range_start');
+    storage.removeItem('range_end');
     updateJumpInputMax();
     applyFilterChange();
 }
@@ -2218,14 +2102,16 @@ function toggleStatsPanel() {
             toggleBtn.classList.remove('open');
             // 恢復統計圖示
             if (toggleIcon) {
-                toggleIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>';
+                toggleIcon.innerHTML =
+                    '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>';
             }
         } else {
             panel.classList.add('open');
             toggleBtn.classList.add('open');
             // 變成關閉圖示
             if (toggleIcon) {
-                toggleIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>';
+                toggleIcon.innerHTML =
+                    '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>';
             }
         }
     }
@@ -2276,7 +2162,8 @@ function isTypingContext(target) {
  */
 function isOverlayOpen() {
     const overlayIds = ['imageDialog', 'settingsDialog', 'advancedSettingsDialog'];
-    if (overlayIds.some(id => !document.getElementById(id)?.classList.contains('hidden'))) return true;
+    if (overlayIds.some((id) => !document.getElementById(id)?.classList.contains('hidden')))
+        return true;
     if (isExplanationPanelOpen) return true;
     return !!document.getElementById('mobileMenuPanel')?.classList.contains('open');
 }
@@ -2328,7 +2215,7 @@ document.addEventListener('keydown', (e) => {
  * @returns {string|null} 選項代號，無對應時回傳 null
  */
 function resolveOptionKey(key, question) {
-    const letters = question.options.map(opt => opt.letter);
+    const letters = question.options.map((opt) => opt.letter);
 
     const upper = key.toUpperCase();
     if (letters.includes(upper)) return upper;
@@ -2356,36 +2243,36 @@ function toggleOptionSelection(letter) {
 // ==================== 初始化 ====================
 document.addEventListener('DOMContentLoaded', () => {
     // 載入已儲存的 GROQ 設定
-    const savedKey = localStorage.getItem('groq_api_key');
-    const savedModel = localStorage.getItem('groq_model');
+    const savedKey = storage.getItem('groq_api_key');
+    const savedModel = storage.getItem('groq_model');
     if (savedKey) groqApiKey = savedKey;
     if (savedModel) groqModel = savedModel;
 
     // 載入已儲存的進階設定
-    const savedRandomJump = localStorage.getItem('random_jump_enabled');
+    const savedRandomJump = storage.getItem('random_jump_enabled');
     randomJumpEnabled = savedRandomJump === 'true';
 
     // 載入關鍵字高亮設定（預設為啟用）
-    const savedKeywordHighlight = localStorage.getItem('keyword_highlight_enabled');
+    const savedKeywordHighlight = storage.getItem('keyword_highlight_enabled');
     keywordHighlightEnabled = savedKeywordHighlight !== 'false'; // 預設 true，只有明確設為 false 才停用
 
     // 載入閱讀範圍設定
-    const savedRangeEnabled = localStorage.getItem('range_enabled');
-    const savedRangeStart = localStorage.getItem('range_start');
-    const savedRangeEnd = localStorage.getItem('range_end');
+    const savedRangeEnabled = storage.getItem('range_enabled');
+    const savedRangeStart = storage.getItem('range_start');
+    const savedRangeEnd = storage.getItem('range_end');
     rangeEnabled = savedRangeEnabled === 'true';
     rangeStart = savedRangeStart ? parseInt(savedRangeStart) : 1;
     rangeEnd = savedRangeEnd ? parseInt(savedRangeEnd) : null;
 
     // 載入僅顯示重要題目設定
-    const savedShowImportantOnly = localStorage.getItem('show_important_only');
+    const savedShowImportantOnly = storage.getItem('show_important_only');
     showImportantOnly = savedShowImportantOnly === 'true';
 
     // 載入錯題複習設定
-    wrongOnlyEnabled = localStorage.getItem('wrong_only_enabled') === 'true';
+    wrongOnlyEnabled = storage.getItem('wrong_only_enabled') === 'true';
 
     // 載入題型過濾設定
-    const savedQuestionTypes = localStorage.getItem('enabled_question_types');
+    const savedQuestionTypes = storage.getItem('enabled_question_types');
     if (savedQuestionTypes) {
         try {
             enabledQuestionTypes = JSON.parse(savedQuestionTypes);
@@ -2441,7 +2328,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const dialogs = [
                 ['imageDialog', closeImageDialog],
                 ['settingsDialog', closeSettingsDialog],
-                ['advancedSettingsDialog', closeAdvancedSettingsDialog]
+                ['advancedSettingsDialog', closeAdvancedSettingsDialog],
             ];
             for (const [id, close] of dialogs) {
                 if (!document.getElementById(id)?.classList.contains('hidden')) {
@@ -2526,7 +2413,7 @@ D. <選項內容簡述與判斷原因> ❌ / ✅
 async function analyzeWithAI() {
     // 檢查 API Key
     if (!groqApiKey) {
-        const savedKey = localStorage.getItem('groq_api_key');
+        const savedKey = storage.getItem('groq_api_key');
         if (savedKey) {
             groqApiKey = savedKey;
         } else {
@@ -2537,8 +2424,8 @@ async function analyzeWithAI() {
     }
 
     // 載入已儲存的模型和自訂提示詞
-    const savedModel = localStorage.getItem('groq_model');
-    const savedPrompt = localStorage.getItem('groq_custom_prompt');
+    const savedModel = storage.getItem('groq_model');
+    const savedPrompt = storage.getItem('groq_custom_prompt');
     if (savedModel) {
         groqModel = savedModel;
     }
@@ -2583,7 +2470,7 @@ ${q.chineseText ? `中文翻譯：\n${q.chineseText}\n` : ''}`;
         }
     } else {
         // 選擇題格式
-        const optionsText = q.options.map(opt => `${opt.letter}. ${opt.text}`).join('\n');
+        const optionsText = q.options.map((opt) => `${opt.letter}. ${opt.text}`).join('\n');
         userPrompt += `選項：\n${optionsText}`;
     }
 
@@ -2591,18 +2478,18 @@ ${q.chineseText ? `中文翻譯：\n${q.chineseText}\n` : ''}`;
         const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${groqApiKey}`,
-                'Content-Type': 'application/json'
+                Authorization: `Bearer ${groqApiKey}`,
+                'Content-Type': 'application/json',
             },
             body: JSON.stringify({
                 model: groqModel,
                 messages: [
                     { role: 'system', content: systemPrompt },
-                    { role: 'user', content: userPrompt }
+                    { role: 'user', content: userPrompt },
                 ],
                 temperature: 0.3,
-                max_tokens: 2048
-            })
+                max_tokens: 2048,
+            }),
         });
 
         if (!response.ok) {
@@ -2617,7 +2504,6 @@ ${q.chineseText ? `中文翻譯：\n${q.chineseText}\n` : ''}`;
         loading.classList.add('hidden');
         content.classList.remove('hidden');
         content.innerHTML = formatAiResponse(result);
-
     } catch (err) {
         console.error('AI 分析錯誤:', err);
         loading.classList.add('hidden');
@@ -2641,10 +2527,7 @@ function formatAiResponse(text) {
     let processed = text.replace(/^-{3,}\s*\n?/gm, '').trim();
 
     // 先轉義 HTML
-    processed = processed
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+    processed = processed.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
     // 按行處理
     const lines = processed.split('\n');
@@ -2665,7 +2548,9 @@ function formatAiResponse(text) {
         if (/^正確答案[：:]/.test(line)) {
             const match = line.match(/正確答案[：:]\s*(.+)/);
             if (match) {
-                result.push(`<div class="bg-green-500/10 border-l-4 border-green-500 px-4 py-3 rounded-r-lg mb-4"><div class="text-lg font-bold text-green-400 mb-1">✓ 正確答案</div><div class="text-2xl font-bold text-green-300 tracking-wider">${match[1]}</div></div>`);
+                result.push(
+                    `<div class="bg-green-500/10 border-l-4 border-green-500 px-4 py-3 rounded-r-lg mb-4"><div class="text-lg font-bold text-green-400 mb-1">✓ 正確答案</div><div class="text-2xl font-bold text-green-300 tracking-wider">${match[1]}</div></div>`,
+                );
             }
             continue;
         }
@@ -2674,7 +2559,9 @@ function formatAiResponse(text) {
         if (/^(解析|題目條件關鍵|各選項比較|結論)[：:]/.test(line)) {
             const match = line.match(/^(解析|題目條件關鍵|各選項比較|結論)[：:]/);
             if (match) {
-                result.push(`<div class="mt-6 mb-3 first:mt-0"><h4 class="text-lg font-bold text-blue-400 flex items-center gap-2"><span class="w-1 h-5 bg-blue-400 rounded"></span>${match[1]}</h4></div>`);
+                result.push(
+                    `<div class="mt-6 mb-3 first:mt-0"><h4 class="text-lg font-bold text-blue-400 flex items-center gap-2"><span class="w-1 h-5 bg-blue-400 rounded"></span>${match[1]}</h4></div>`,
+                );
             }
             continue;
         }
@@ -2684,25 +2571,38 @@ function formatAiResponse(text) {
         if (optionMatch) {
             const [, letter, content, emoji] = optionMatch;
             const isCorrect = emoji === '✅';
-            const bgClass = isCorrect ? 'bg-green-500/10 border-green-500/30' : 'bg-slate-800/50 border-slate-700/50';
+            const bgClass = isCorrect
+                ? 'bg-green-500/10 border-green-500/30'
+                : 'bg-slate-800/50 border-slate-700/50';
             const textClass = isCorrect ? 'text-green-300' : 'text-gray-400';
             const letterClass = isCorrect ? 'text-green-400' : 'text-slate-500';
-            result.push(`<div class="ml-4 my-2.5 p-3 rounded-lg border ${bgClass} flex items-start gap-3"><span class="font-bold ${letterClass} text-lg shrink-0">${letter}.</span><span class="flex-1 ${textClass} leading-relaxed">${content}</span><span class="text-xl shrink-0">${emoji}</span></div>`);
+            result.push(
+                `<div class="ml-4 my-2.5 p-3 rounded-lg border ${bgClass} flex items-start gap-3"><span class="font-bold ${letterClass} text-lg shrink-0">${letter}.</span><span class="flex-1 ${textClass} leading-relaxed">${content}</span><span class="text-xl shrink-0">${emoji}</span></div>`,
+            );
             continue;
         }
 
         // 列表項
         const listMatch = line.match(/^(\d+)\.\s+(.+)$/);
         if (listMatch) {
-            result.push(`<div class="ml-6 my-2 flex items-start gap-2"><span class="text-blue-400 font-semibold shrink-0">${listMatch[1]}.</span><span class="text-gray-300 leading-relaxed">${listMatch[2]}</span></div>`);
+            result.push(
+                `<div class="ml-6 my-2 flex items-start gap-2"><span class="text-blue-400 font-semibold shrink-0">${listMatch[1]}.</span><span class="text-gray-300 leading-relaxed">${listMatch[2]}</span></div>`,
+            );
             continue;
         }
 
         // 一般文字（處理粗體）
-        let formattedLine = line.replace(/\*\*(.+?)\*\*/g, '<strong class="text-white font-semibold">$1</strong>');
+        let formattedLine = line.replace(
+            /\*\*(.+?)\*\*/g,
+            '<strong class="text-white font-semibold">$1</strong>',
+        );
 
         // 如果前一行不是特殊格式，添加適當的間距和樣式
-        if (result.length > 0 && !result[result.length - 1].includes('class="mt-6') && !result[result.length - 1].includes('class="bg-')) {
+        if (
+            result.length > 0 &&
+            !result[result.length - 1].includes('class="mt-6') &&
+            !result[result.length - 1].includes('class="bg-')
+        ) {
             formattedLine = `<div class="mb-2.5 text-gray-300 leading-relaxed text-base">${formattedLine}</div>`;
         } else {
             formattedLine = `<div class="text-gray-300 leading-relaxed text-base">${formattedLine}</div>`;

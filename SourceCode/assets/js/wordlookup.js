@@ -28,21 +28,93 @@
 
     // 純功能詞不值得查，加上底線只會造成視覺噪音
     const STOP_WORDS = new Set([
-        'a', 'an', 'the', 'and', 'or', 'but', 'if', 'of', 'to', 'in', 'on', 'at',
-        'by', 'for', 'is', 'am', 'are', 'was', 'were', 'be', 'been', 'being',
-        'it', 'its', 'as', 'that', 'this', 'these', 'those', 'he', 'she', 'they',
-        'we', 'you', 'i', 'his', 'her', 'their', 'our', 'your', 'my', 'them',
-        'him', 'us', 'me', 'not', 'no', 'so', 'than', 'then', 'too', 'very',
-        'do', 'does', 'did', 'has', 'have', 'had', 'will', 'would', 'can',
-        'could', 'may', 'might', 'must', 'shall', 'should',
+        'a',
+        'an',
+        'the',
+        'and',
+        'or',
+        'but',
+        'if',
+        'of',
+        'to',
+        'in',
+        'on',
+        'at',
+        'by',
+        'for',
+        'is',
+        'am',
+        'are',
+        'was',
+        'were',
+        'be',
+        'been',
+        'being',
+        'it',
+        'its',
+        'as',
+        'that',
+        'this',
+        'these',
+        'those',
+        'he',
+        'she',
+        'they',
+        'we',
+        'you',
+        'i',
+        'his',
+        'her',
+        'their',
+        'our',
+        'your',
+        'my',
+        'them',
+        'him',
+        'us',
+        'me',
+        'not',
+        'no',
+        'so',
+        'than',
+        'then',
+        'too',
+        'very',
+        'do',
+        'does',
+        'did',
+        'has',
+        'have',
+        'had',
+        'will',
+        'would',
+        'can',
+        'could',
+        'may',
+        'might',
+        'must',
+        'shall',
+        'should',
     ]);
 
     // 可剝離的前綴：misconfigured → configured、cybersecurity → security
     const PREFIXES = [
-        ['un', '非／未'], ['non', '非'], ['mis', '錯誤地'], ['re', '重新'],
-        ['pre', '預先'], ['post', '之後'], ['over', '過度'], ['under', '不足'],
-        ['sub', '次級'], ['multi', '多重'], ['anti', '反'], ['cyber', '網路'],
-        ['inter', '互相'], ['auto', '自動'], ['de', '解除'], ['dis', '不'],
+        ['un', '非／未'],
+        ['non', '非'],
+        ['mis', '錯誤地'],
+        ['re', '重新'],
+        ['pre', '預先'],
+        ['post', '之後'],
+        ['over', '過度'],
+        ['under', '不足'],
+        ['sub', '次級'],
+        ['multi', '多重'],
+        ['anti', '反'],
+        ['cyber', '網路'],
+        ['inter', '互相'],
+        ['auto', '自動'],
+        ['de', '解除'],
+        ['dis', '不'],
     ];
 
     let tooltipEl = null;
@@ -77,7 +149,10 @@
      */
     function resolveIn(table, sourceName, word) {
         if (!table) return null;
-        const make = (text, base) => (base && base !== word ? { text, source: sourceName, base } : { text, source: sourceName });
+        const make = (text, base) =>
+            base && base !== word
+                ? { text, source: sourceName, base }
+                : { text, source: sourceName };
 
         let value = pick(table, word);
         if (value) return make(value);
@@ -114,7 +189,9 @@
      * 因此把原形的釋義一併帶出來。
      */
     function expandInflection(entry) {
-        const m = entry.text.match(/^([a-zA-Z-]+)\s*的(過去式|過去分詞|現在分詞|複數形?|第三人稱單數|比較級|最高級)/);
+        const m = entry.text.match(
+            /^([a-zA-Z-]+)\s*的(過去式|過去分詞|現在分詞|複數形?|第三人稱單數|比較級|最高級)/,
+        );
         if (!m) return entry;
         const base = lookupWord(m[1].toLowerCase());
         if (!base) return entry;
@@ -130,7 +207,7 @@
         const parts = [];
         for (const seg of segments) {
             const hit = lookupWord(seg);
-            if (!hit) return null;   // 有一段查不到就整體放棄，半套翻譯只會誤導
+            if (!hit) return null; // 有一段查不到就整體放棄，半套翻譯只會誤導
             parts.push(seg + '：' + hit.text.replace(/^[a-z]+\.\s*/, '').split('；')[0]);
         }
         return { text: parts.join('｜'), source: 'compound' };
@@ -172,7 +249,8 @@
         // 先收集再改寫：邊走邊改 DOM 會讓 TreeWalker 的走訪結果不可預期
         const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
             acceptNode(node) {
-                if (!node.nodeValue || !/[A-Za-z]/.test(node.nodeValue)) return NodeFilter.FILTER_REJECT;
+                if (!node.nodeValue || !/[A-Za-z]/.test(node.nodeValue))
+                    return NodeFilter.FILTER_REJECT;
                 for (let el = node.parentElement; el && el !== root; el = el.parentElement) {
                     if (SKIP_TAGS.has(el.tagName) || el.classList.contains('wordlookup-term')) {
                         return NodeFilter.FILTER_REJECT;
@@ -196,7 +274,7 @@
             while ((match = WORD_RE.exec(text)) !== null) {
                 const word = match[0];
                 if (word.length < 2 || STOP_WORDS.has(word.toLowerCase())) continue;
-                if (!lookup(word)) continue;   // 查不到就不加底線，避免點了沒反應
+                if (!lookup(word)) continue; // 查不到就不加底線，避免點了沒反應
 
                 if (match.index > cursor) {
                     fragment.appendChild(document.createTextNode(text.slice(cursor, match.index)));
@@ -214,7 +292,8 @@
             }
 
             if (!matched) continue;
-            if (cursor < text.length) fragment.appendChild(document.createTextNode(text.slice(cursor)));
+            if (cursor < text.length)
+                fragment.appendChild(document.createTextNode(text.slice(cursor)));
             node.parentNode.replaceChild(fragment, node);
         }
 
@@ -229,12 +308,12 @@
         tooltipEl.className = 'wordlookup-tip';
         tooltipEl.setAttribute('role', 'tooltip');
         tooltipEl.innerHTML =
-            '<div class="wordlookup-tip-head">'
-            + '<span class="wordlookup-tip-word"></span>'
-            + '<span class="wordlookup-tip-tag"></span>'
-            + '</div>'
-            + '<div class="wordlookup-tip-body"></div>'
-            + '<div class="wordlookup-tip-arrow"></div>';
+            '<div class="wordlookup-tip-head">' +
+            '<span class="wordlookup-tip-word"></span>' +
+            '<span class="wordlookup-tip-tag"></span>' +
+            '</div>' +
+            '<div class="wordlookup-tip-body"></div>' +
+            '<div class="wordlookup-tip-arrow"></div>';
         document.body.appendChild(tooltipEl);
         return tooltipEl;
     }
@@ -326,8 +405,11 @@
 
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') closeTooltip();
-            if ((e.key === 'Enter' || e.key === ' ') && document.activeElement
-                && document.activeElement.classList.contains('wordlookup-term')) {
+            if (
+                (e.key === 'Enter' || e.key === ' ') &&
+                document.activeElement &&
+                document.activeElement.classList.contains('wordlookup-term')
+            ) {
                 e.preventDefault();
                 openTooltip(document.activeElement);
             }

@@ -50,6 +50,65 @@ let timerStartTime = 0;        // 計時器總時長（秒）
 let timerDeadline = 0;         // 計時器到期時間戳（毫秒）
 let timerQuestionNum = null;   // 計時器所屬題號，用於判斷是否需要重新計時
 
+// ==================== 圖片路徑處理 ====================
+
+/** 題目圖片的存放目錄，相對於 index.html */
+const IMAGE_BASE_DIR = 'images/';
+
+/**
+ * 正規化題庫中的圖片路徑
+ *
+ * 題庫的圖片多半寫成 `../images/q44_1.png`，那是相對於「題庫 md 檔自身位置」
+ * 的寫法。但瀏覽器解析 <img src> 時的基準是「目前頁面的 URL」而非 md 檔，
+ * 兩者不一致，圖片就會 404。
+ *
+ * 而且用「載入題庫」按鈕選檔時，瀏覽器基於安全考量不會提供 md 檔的磁碟路徑，
+ * 任何相對於 md 的路徑在瀏覽器裡根本無從還原 —— 圖片只能放在網站目錄底下。
+ *
+ * 因此一律改寫為指向 index.html 同層的 images/：
+ *   ../images/q44_1.png  →  images/q44_1.png
+ *   ./images/2024/q1.png →  images/2024/q1.png   （保留 images/ 之後的子目錄）
+ *   q44_1.png            →  images/q44_1.png
+ * 外部網址與 data URI 則照原樣使用。
+ *
+ * @param {string} rawPath - 題庫 md 中寫的原始路徑
+ * @returns {string} 可直接放進 <img src> 的路徑
+ */
+function normalizeImagePath(rawPath) {
+    const path = String(rawPath || '').trim();
+    if (!path) return '';
+
+    // 外部資源照原樣使用（此時已不是離線資源，由使用者自行負責）
+    if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(path)) return path;
+
+    // 剝掉查詢字串與 hash，再統一分隔符號
+    const cleaned = path.split(/[?#]/)[0].replace(/\\/g, '/');
+
+    // 路徑中若含 images/ 這一段，保留其後的完整結構（子目錄不會被壓平）
+    const scoped = cleaned.match(/(?:^|\/)images\/(.+)$/i);
+    if (scoped) return IMAGE_BASE_DIR + scoped[1];
+
+    // 否則只取檔名
+    const fileName = cleaned.split('/').pop();
+    return fileName ? IMAGE_BASE_DIR + fileName : '';
+}
+
+/**
+ * 圖片載不到時，就地換成說明用的提示框。
+ * 直接留一張破圖只會讓人以為程式壞了，講清楚檔案該放哪比較有用。
+ * @param {HTMLImageElement} img
+ */
+function handleImageError(img) {
+    const src = img.getAttribute('src') || '';
+    const placeholder = document.createElement('div');
+    placeholder.className = 'w-full max-w-lg p-4 rounded-lg border border-dashed border-slate-600 bg-slate-800/50 text-center';
+    placeholder.innerHTML =
+        '<p class="text-slate-300 text-sm mb-1">🖼️ 圖片載入失敗</p>'
+        + '<p class="text-slate-500 text-xs break-all">找不到 <code>' + escapeHtml(src) + '</code></p>'
+        + '<p class="text-slate-500 text-xs mt-2">請將圖片檔放到 <code>' + IMAGE_BASE_DIR + '</code>（與 index.html 同層）</p>';
+    img.replaceWith(placeholder);
+}
+
 // ==================== 題庫解析器 ====================
 /**
  * 解析 Markdown 題庫檔案
@@ -95,7 +154,7 @@ function parseQuestions(markdown) {
         // 避免解析內容中的示意圖被誤收為題目附圖）
         const imageScope = block.split(/\*\*題目解析[：:]?\*\*/)[0];
         const imageMatches = [...imageScope.matchAll(/!\[[^\]]*\]\(([^)]*)\)/g)];
-        const imagePaths = imageMatches.map(m => m[1]);
+        const imagePaths = imageMatches.map(m => normalizeImagePath(m[1])).filter(Boolean);
 
         let options = [];
         let correctAnswer = '';
@@ -531,7 +590,7 @@ function renderQuestion(opts = {}) {
                 ${q.imagePaths.length > 1 ? `<p class="text-sm text-slate-400 mb-2">圖片 ${index + 1} / ${q.imagePaths.length}</p>` : ''}
                 <img src="${escapeHtml(path)}" alt="題目圖片 ${index + 1}"
                      class="max-w-full object-contain select-none shadow-2xl rounded border border-slate-700"
-                     draggable="false">
+                     draggable="false" onerror="handleImageError(this)">
             </div>
         `).join('');
     } else {
@@ -548,7 +607,7 @@ function renderQuestion(opts = {}) {
                 ${q.imagePaths.length > 1 ? `<p class="text-sm text-slate-400 mb-2">圖片 ${index + 1} / ${q.imagePaths.length}</p>` : ''}
                 <img src="${escapeHtml(path)}" alt="題目圖片 ${index + 1}" loading="lazy"
                      class="max-w-full rounded-lg border border-slate-600 shadow-lg cursor-pointer hover:border-blue-500 transition-colors"
-                     onclick="openImageDialog()"
+                     onclick="openImageDialog()" onerror="handleImageError(this)"
                      title="點擊放大查看">
             </div>
         `).join('');

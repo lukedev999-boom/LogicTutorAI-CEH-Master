@@ -14,7 +14,7 @@ for (const name of ['index.html', 'database.md', 'sampleMd', 'images', 'assets']
     });
 }
 for (const name of ['LICENSE', 'THIRD_PARTY_NOTICES.md']) {
-    fs.copyFileSync(path.join(root, '..', name), path.join(output, name));
+    fs.copyFileSync(path.join(root, name), path.join(output, name));
 }
 fs.writeFileSync(path.join(output, '.nojekyll'), '');
 console.log('已打包 dist/，可部署到網站根目錄或子目錄。');

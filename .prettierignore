@@ -1,4 +1,5 @@
 node_modules/
+Template/
 dist/
 .cache/
 index.html

@@ -1,11 +1,11 @@
-/Template
+/Template/
 
 # 建置期依賴（執行期不需要）
 node_modules/
-SourceCode/dist/
+/dist/
 
 # 系統檔案
 .DS_Store
 
 # 詞典建置用的原始資料（68MB，由 npm run build:dict 自動下載）
-SourceCode/.cache/
+/.cache/

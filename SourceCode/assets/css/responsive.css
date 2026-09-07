@@ -550,3 +550,18 @@
 .hidden {
     display: none !important;
 }
+
+/* 英文單字即點即譯：觸控裝置放寬點擊範圍與卡片寬度 */
+@media (hover: none) and (pointer: coarse) {
+    .wordlookup-term {
+        padding: 2px 0;
+        text-underline-offset: 5px;
+    }
+    .wordlookup-term:hover {
+        background-color: transparent;
+    }
+    .wordlookup-tip {
+        max-width: calc(100vw - 20px);
+        font-size: 15px;
+    }
+}

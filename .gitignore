@@ -6,3 +6,6 @@ package-lock.json
 
 # 系統檔案
 .DS_Store
+
+# 詞典建置用的原始資料（68MB，由 npm run build:dict 自動下載）
+SourceCode/.cache/

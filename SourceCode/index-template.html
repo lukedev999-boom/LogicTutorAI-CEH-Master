@@ -29,6 +29,17 @@
     <div id="toastContainer" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center gap-2 pointer-events-none"
          role="status" aria-live="polite"></div>
 
+    <!--
+        英文單字即點即譯：詞典資料以 <script> 而非 fetch 載入，
+        因為本專案支援 file:// 直接開啟，該情境下 fetch 本地 JSON 會被同源政策擋掉。
+        defer 保證依序執行，且不阻塞頁面解析。
+    -->
+    <script src="assets/js/lemma-rules.js" defer></script>
+    <script src="assets/data/glossary.js" defer></script>
+    <script src="assets/data/dict.js" defer></script>
+    <script src="assets/data/lemma.js" defer></script>
+    <script src="assets/js/wordlookup.js" defer></script>
+
     <script src="assets/js/main.js" defer></script>
 </body>
 </html>

@@ -21,6 +21,7 @@
 - 🖼️ **圖片題目**：支援題目內嵌圖片顯示
 - 🔴 **關鍵字高亮**：使用反引號標記關鍵字，自動紅色顯示
 - 🌐 **中英文切換**：一鍵切換題目語言顯示
+- 📖 **英文單字即點即譯**：英文題幹的單字帶虛線底線，點擊即顯示繁體中文釋義，完全離線
 - 📊 **答題卡導航**：視覺化答題狀態，快速跳轉題目
 - 📈 **答題統計**：即時顯示答題進度與正確率
 - 💾 **進度儲存**：自動儲存答題進度至瀏覽器本地儲存
@@ -276,6 +277,15 @@ Which of the following are symmetric encryption algorithms? (Choose two.)
 - 點擊題目卡片右上角的「顯示中文翻譯」按鈕
 - 可在英文與中文之間切換顯示
 
+#### 英文單字即點即譯
+- 顯示英文題目時，查得到釋義的單字會帶有**虛線底線**
+- **點擊單字**即在下方彈出繁體中文釋義卡；再點一次、點卡片以外的地方或按 `Esc` 可關閉
+- 資安術語會標上「資安術語」標籤，採用貼合 CEH 語境的解釋，而非一般字典的字面義
+  - 例：`payload` 顯示「攻擊酬載」而非「商務載重」，`shell` 顯示「命令列存取權」而非「貝殼」
+- 詞形變化會自動還原（`attackers` → `attacker`、`hardened` → `harden`）並標示原形
+- 切換為中文顯示時自動停用
+- **完全離線**：釋義來自本地詞典檔，不會發出任何網路請求
+
 #### 查看圖片
 - 若題目包含圖片，會顯示「查看圖片」按鈕
 - 點擊後以彈窗形式顯示完整圖片
@@ -351,12 +361,30 @@ npm run build:css    # 產生 assets/vendor/tailwind.css
 npm run build:html   # 由 partials/ 產生 index.html
 ```
 
+### 重建英漢詞典（極少需要）
+
+`assets/data/dict.js` 與 `lemma.js` 已隨專案附上，一般情況不必重建。
+只有在想調整收錄範圍或釋義長度時才需要執行：
+
+```bash
+npm run build:dict
+```
+
+首次執行會自動從 GitHub 下載 ECDICT 原始資料（約 68 MB）至 `.cache/`，
+之後改用快取。此步驟**不包含在 `npm run build`** 中，因為它需要網路且耗時較久。
+
+> 💡 想調整或補充資安術語翻譯，直接編輯 `assets/data/glossary.js` 即可，
+> 該檔案為手動維護，修改後重新整理頁面就生效，不需要執行任何建置指令。
+
 | 檔案 | 用途 |
 |---|---|
 | `index-template.html` | HTML 外框（head、資源引用） |
 | `partials/*.html` | 各區塊原始碼，**請修改這裡而非 index.html** |
 | `index.html` | 建置產物，會被覆寫 |
 | `tailwind.config.js` | Tailwind 設定與 safelist |
+| `tools/build-dict.js` | 由 ECDICT 產生離線英漢詞典 |
+| `assets/data/dict.js` | 建置產物，會被覆寫 |
+| `assets/data/glossary.js` | 資安術語表，**手動維護**，不會被建置覆寫 |
 
 > ⚠️ `index.html` 為自動產生，直接編輯會在下次建置時遺失。
 
@@ -378,6 +406,9 @@ npm run build:html   # 由 partials/ 產生 index.html
 | Tailwind CSS | `assets/vendor/tailwind.css` | 由 `npm run build:css` 預先編譯（約 32 KB） |
 | marked.js | `assets/vendor/marked.min.js` | Markdown 渲染 |
 | 等寬字型 | `assets/fonts/jetbrains-mono-latin.woff2` | 僅內嵌 latin 子集（約 31 KB） |
+| 英漢詞典 | `assets/data/dict.js` | 37,887 詞，由 ECDICT 建置並轉為台灣繁體（約 2.2 MB） |
+| 資安術語表 | `assets/data/glossary.js` | 407 條 CEH 術語，手動維護（約 29 KB） |
+| 詞形還原表 | `assets/data/lemma.js` | 613 條不規則變形（約 15 KB） |
 | 中文字型 | 系統內建 | PingFang TC／微軟正黑體／Noto Sans CJK |
 
 > ⚠️ 修改 HTML 或 JS 中的 Tailwind 類別後，需重新執行 `npm run build:css`。
@@ -393,6 +424,7 @@ npm run build:html   # 由 partials/ 產生 index.html
 - **題目渲染器**：動態渲染題目與選項
 - **答題管理器**：管理答題狀態與進度
 - **AI 整合模組**：處理 GROQ API 請求與回應
+- **即點即譯模組**：`wordlookup.js` 負責單字標記、離線查詢與釋義卡
 
 ## 🌐 瀏覽器支援
 
@@ -406,6 +438,8 @@ npm run build:html   # 由 partials/ 產生 index.html
 ## 📝 授權
 
 本專案為開源專案，可自由使用與修改。
+
+內建英漢詞典資料取自 [ECDICT](https://github.com/skywind3000/ECDICT)（MIT License），簡繁轉換使用 [opencc-js](https://github.com/nk2028/opencc-js)。
 
 ## 🤝 貢獻
 

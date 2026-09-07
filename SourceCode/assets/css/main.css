@@ -471,3 +471,110 @@ body {
     overscroll-behavior-y: none;
     -webkit-overflow-scrolling: touch;
 }
+
+/* ========================================
+   英文單字即點即譯
+   ======================================== */
+
+/* 可查詢的單字：虛線底線。
+   使用 text-decoration 而非 border-bottom，是因為前者不佔版面高度、
+   也能跟著文字自動換行斷開，不會撐開行距或在折行處留下懸空的線段。 */
+.wordlookup-term {
+    text-decoration: underline;
+    text-decoration-style: dashed;
+    text-decoration-color: rgba(148, 163, 184, 0.5);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 4px;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: background-color 0.15s ease, text-decoration-color 0.15s ease;
+}
+.wordlookup-term:hover {
+    background-color: rgba(59, 130, 246, 0.16);
+    text-decoration-color: rgba(96, 165, 250, 0.9);
+}
+.wordlookup-term:focus-visible {
+    outline: 2px solid rgba(96, 165, 250, 0.8);
+    outline-offset: 2px;
+}
+.wordlookup-term.is-active {
+    background-color: rgba(59, 130, 246, 0.28);
+    text-decoration-color: rgba(96, 165, 250, 1);
+}
+
+/* 釋義卡 */
+.wordlookup-tip {
+    position: fixed;
+    z-index: 1200;
+    max-width: min(320px, calc(100vw - 24px));
+    padding: 10px 13px;
+    background: #1e293b;
+    border: 1px solid rgba(96, 165, 250, 0.35);
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+    color: #e2e8f0;
+    font-size: 14px;
+    line-height: 1.6;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-4px);
+    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+    pointer-events: auto;
+}
+.wordlookup-tip.is-visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.wordlookup-tip-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 5px;
+}
+.wordlookup-tip-word {
+    font-weight: 700;
+    font-size: 15px;
+    color: #93c5fd;
+    word-break: break-word;
+}
+.wordlookup-tip-tag {
+    flex-shrink: 0;
+    font-size: 11px;
+    color: #94a3b8;
+}
+.wordlookup-tip-tag:empty {
+    display: none;
+}
+.wordlookup-tip-tag.is-term {
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(234, 179, 8, 0.18);
+    color: #fcd34d;
+}
+.wordlookup-tip-body {
+    color: #e2e8f0;
+    word-break: break-word;
+}
+
+/* 指向單字的小箭頭，left 由 JS 依單字中心點設定 */
+.wordlookup-tip-arrow {
+    position: absolute;
+    top: -5px;
+    width: 9px;
+    height: 9px;
+    margin-left: -4px;
+    background: #1e293b;
+    border-left: 1px solid rgba(96, 165, 250, 0.35);
+    border-top: 1px solid rgba(96, 165, 250, 0.35);
+    transform: rotate(45deg);
+}
+.wordlookup-tip.is-above .wordlookup-tip-arrow {
+    top: auto;
+    bottom: -5px;
+    border-left: none;
+    border-top: none;
+    border-right: 1px solid rgba(96, 165, 250, 0.35);
+    border-bottom: 1px solid rgba(96, 165, 250, 0.35);
+}

@@ -560,8 +560,17 @@ function renderQuestion(opts = {}) {
     // 顯示題目文字（支援反引號關鍵字高亮）
     // 若該題沒有中文翻譯，回退顯示英文原文，避免出現整片空白
     const hasChinese = !!(q.chineseText && q.chineseText.trim());
-    const questionText = (showChinese && hasChinese) ? q.chineseText : q.englishText;
-    document.getElementById('questionText').innerHTML = highlightKeywords(questionText);
+    const showingEnglish = !(showChinese && hasChinese);
+    const questionText = showingEnglish ? q.englishText : q.chineseText;
+    const questionTextEl = document.getElementById('questionText');
+    questionTextEl.innerHTML = highlightKeywords(questionText);
+
+    // 英文題幹啟用即點即譯：為每個查得到的單字加上虛線底線，點擊顯示繁體中文釋義。
+    // 顯示中文翻譯時不套用（中文不需要查英漢字典），切題時也要先收起上一張釋義卡。
+    if (window.WordLookup) {
+        window.WordLookup.clear();
+        if (showingEnglish) window.WordLookup.apply(questionTextEl);
+    }
 
     const noTranslationHint = document.getElementById('noTranslationHint');
     if (noTranslationHint) {
